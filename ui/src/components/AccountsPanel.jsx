@@ -52,7 +52,7 @@ export default function AccountsPanel({ accounts, selected, onSelect, authToken,
             <StatusPill acc={acc} t={t} />
             <div className="account-metrics">
               <span>
-              {t("cold")}: {acc.metrics?.cold_sent || 0}
+              {t("cold_sent")}: {acc.metrics?.cold_sent || 0}
               </span>
               <span>
                 {t("replies_short")}: {acc.metrics?.replies_received || 0}

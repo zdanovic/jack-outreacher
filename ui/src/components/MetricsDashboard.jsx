@@ -10,10 +10,9 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
       acc.replies += m.replies_received || 0;
       acc.hot += m.hot_leads || 0;
       acc.warm += m.warm_leads || 0;
-      acc.cold += m.cold_leads || 0;
       return acc;
     },
-    { cold_sent: 0, replies: 0, hot: 0, warm: 0, cold: 0 }
+    { cold_sent: 0, replies: 0, hot: 0, warm: 0 }
   );
 
   const [range, setRange] = useState(30);
@@ -54,18 +53,17 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
 
   const outreachSeries = useMemo(() => {
     return [
-      { label: "Cold sent", color: "#38bdf8", points: byDate.map((d) => d.cold_sent || 0) },
-      { label: "Replies", color: "#22c55e", points: byDate.map((d) => d.replies_received || 0) },
+      { label: t("cold_sent"), color: "#38bdf8", points: byDate.map((d) => d.cold_sent || 0) },
+      { label: t("replies"), color: "#22c55e", points: byDate.map((d) => d.replies_received || 0) },
     ];
-  }, [byDate]);
+  }, [byDate, t]);
 
   const leadsSeries = useMemo(() => {
     return [
-      { label: "Hot leads", color: "#f97316", points: byDate.map((d) => d.hot_leads || 0) },
-      { label: "Warm leads", color: "#fb7185", points: byDate.map((d) => d.warm_leads || 0) },
-      { label: "Cold leads", color: "#a855f7", points: byDate.map((d) => d.cold_leads || 0) },
+      { label: t("hot"), color: "#f97316", points: byDate.map((d) => d.hot_leads || 0) },
+      { label: t("warm"), color: "#fb7185", points: byDate.map((d) => d.warm_leads || 0) },
     ];
-  }, [byDate]);
+  }, [byDate, t]);
 
   const warmupSeries = useMemo(() => {
     return [
@@ -79,7 +77,6 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
       <div className="dashboard-header">
         <div>
           <h2>{t("dashboard")}</h2>
-          <p className="muted">{t("subtitle")}</p>
         </div>
         <div className="range-switcher">
           {[1, 3, 7, 30, 90].map((r) => (
@@ -87,6 +84,7 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
               key={r}
               className={range === r ? "chip chip-active" : "chip"}
               onClick={() => setRange(r)}
+              title={`${r}d range`}
             >
               {r}d
             </button>
@@ -111,10 +109,6 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
         <div className="metric-card" title={t("metric_warm_hint")}>
           <div className="metric-label">{t("warm")}</div>
           <div className="metric-value">{aggregate.warm}</div>
-        </div>
-        <div className="metric-card" title={t("metric_cold_hint")}>
-          <div className="metric-label">{t("cold_leads")}</div>
-          <div className="metric-value">{aggregate.cold}</div>
         </div>
       </div>
 
@@ -166,10 +160,10 @@ function ChartCard({ title, subtitle, labels, series, loading, error, t = (k) =>
       {insights && (
         <div className="chart-insights">
           <div className="chart-pill" title="Сумма всех серий за последний день">
-          Latest: {insights.latest}
+            {t("latest")}: {insights.latest}
           </div>
           <div className="chart-pill" title="Среднее за последние 7 дней (или меньше, если данных мало)">
-            7d avg: {insights.avg7}
+            {t("avg7")}: {insights.avg7}
           </div>
           <div
             className={

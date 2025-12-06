@@ -18,7 +18,7 @@ function formatTs(ts) {
   });
 }
 
-export default function LogsView({ logs, authToken, accounts = [] }) {
+export default function LogsView({ logs, authToken, accounts = [], t = (k) => k }) {
   const [modal, setModal] = useState(null); // {account_id, target, messages, loading, error}
   const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
@@ -76,17 +76,17 @@ export default function LogsView({ logs, authToken, accounts = [] }) {
 
   return (
     <section className="logs-view">
-      <h2>Events</h2>
+      <h2>{t("logs_title")}</h2>
       <div className="logs-table">
         <table>
           <thead>
             <tr>
-            <th>Time</th>
-              <th>Account</th>
-              <th>Action</th>
-              <th>Target</th>
-              <th>Result</th>
-              <th>Info</th>
+            <th title={t("col_time_hint")}>{t("col_time")}</th>
+              <th title={t("col_account_hint")}>{t("col_account")}</th>
+              <th title={t("col_action_hint")}>{t("col_action")}</th>
+              <th title={t("col_target_hint")}>{t("col_target")}</th>
+              <th title={t("col_result_hint")}>{t("col_result")}</th>
+              <th title={t("col_info_hint")}>{t("col_info")}</th>
             </tr>
           </thead>
           <tbody>
