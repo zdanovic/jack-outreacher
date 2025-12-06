@@ -269,15 +269,21 @@ export default function App() {
     const nextEnabled = acc.enabled === false ? true : false;
     setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, enabled: nextEnabled } : a)));
     try {
-      await fetchWithAuth(`${API_BASE}/accounts/${encodeURIComponent(acc.id)}/enable`, {
+      const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(acc.id)}/enable`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({ enabled: nextEnabled }),
       });
-      const data = await fetchWithAuth(`${API_BASE}/accounts`);
-      setAccounts(data);
+      if (!resp.ok) {
+        console.error("Toggle failed", resp.status);
+      } else {
+        const data = await fetchWithAuth(`${API_BASE}/accounts`);
+        setAccounts(data);
+      }
     } catch (err) {
-      setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, enabled: acc.enabled } : a)));
       console.error(err);
     }
   };
