@@ -189,9 +189,9 @@ body {
   background: linear-gradient(145deg, rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.4));
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius);
-  padding: 0.45rem 0.7rem;
+  padding: 0.38rem 0.45rem 0.7rem;
   font-size: 0.83rem;
-  gap: 0.5rem;
+  gap: 0.4rem;
   backdrop-filter: blur(12px);
 }
 
@@ -289,7 +289,7 @@ body {
 
 .account-item {
   padding: 0.55rem 0.65rem;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   border: 1px solid transparent;
   cursor: pointer;
   background: var(--bg-surface);
@@ -449,7 +449,7 @@ body {
 }
 .tabs {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .tab {
@@ -609,7 +609,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .chart-title {
@@ -625,12 +625,12 @@ body {
   margin-top: 0.55rem;
   background: radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.08), transparent 45%);
   padding: 0.4rem 0.4rem 0.8rem 0.4rem;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
 }
 
 .chart-insights {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
   margin-top: 0.45rem;
 }
@@ -662,7 +662,7 @@ body {
 .chart-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
   font-size: 0.8rem;
   color: #cbd5e1;
 }
@@ -688,7 +688,7 @@ body {
   width: 100%;
   height: 140px;
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.6), rgba(2, 6, 23, 0.6));
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
 }
 
 .chart-axis {
@@ -711,23 +711,23 @@ body {
 .leads-header {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.28rem;
 }
 
 .leads-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: start;
 }
 
 .filter-block {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.45rem;
+  gap: 0.28rem;
+  padding: 0.38rem 0.45rem;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   background: linear-gradient(150deg, rgba(11, 18, 35, 0.78), rgba(4, 9, 20, 0.7));
 }
 
@@ -742,7 +742,7 @@ body {
 
 .filter-group {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.28rem;
   flex-wrap: wrap;
 }
 
@@ -752,7 +752,7 @@ body {
 
 .lead-search {
   min-width: 220px;
-  padding: 0.42rem 0.58rem;
+  padding: 0.38rem 0.54rem;
   border-radius: 0.75rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
@@ -814,7 +814,7 @@ body {
 }
 
 .kanban-list {
-  padding: 0.45rem;
+  padding: 0.38rem 0.45rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -835,12 +835,12 @@ body {
 }
 .lead-card {
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   padding: 0.5rem 0.6rem;
   background: linear-gradient(160deg, rgba(11, 18, 35, 0.9), rgba(11, 18, 35, 0.7));
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.4rem;
   cursor: pointer;
   transition: border-color 0.2s ease, transform 0.15s ease;
   backdrop-filter: blur(8px);
@@ -918,7 +918,7 @@ body {
 .upload-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   margin-top: 0.35rem;
 }
 
@@ -1016,7 +1016,7 @@ body {
 
 .logs-table th,
 .logs-table td {
-  padding: 0.45rem 0.7rem;
+  padding: 0.38rem 0.45rem 0.7rem;
   border-bottom: 1px solid #0f172a;
 }
 
@@ -1073,7 +1073,7 @@ body {
 
 .dialog-input {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   margin-bottom: 0.5rem;
 }
 
@@ -1288,7 +1288,7 @@ body {
 }
 
 .settings-card input[type="number"] {
-  padding: 0.45rem 0.55rem;
+  padding: 0.38rem 0.45rem 0.55rem;
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
@@ -1406,7 +1406,7 @@ body {
 
 .account-controls {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .account-controls button {
@@ -1426,7 +1426,7 @@ body {
   background: #2563eb;
   border: none;
   color: #fff;
-  padding: 0.45rem 0.8rem;
+  padding: 0.38rem 0.45rem 0.8rem;
   border-radius: 0.5rem;
   cursor: pointer;
 }
@@ -1434,7 +1434,7 @@ body {
 .login-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.5rem;
+  gap: 0.4rem;
   margin-top: 0.5rem;
 }
 
@@ -1537,7 +1537,7 @@ body {
 
 .modal-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   justify-content: flex-end;
 }
 
@@ -1545,7 +1545,7 @@ body {
   background: linear-gradient(135deg, #ff6a1f, #0ea5e9);
   border: none;
   color: white;
-  padding: 0.45rem 0.85rem;
+  padding: 0.38rem 0.45rem 0.85rem;
   border-radius: 0.55rem;
   cursor: pointer;
   box-shadow: 0 12px 30px rgba(37, 99, 235, 0.25);
@@ -1580,7 +1580,7 @@ body {
   background: linear-gradient(160deg, rgba(8, 13, 26, 0.82), rgba(2, 6, 23, 0.78));
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.85rem;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(10px);
   width: 100%;
@@ -1589,10 +1589,10 @@ body {
 .touches-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .touch-card {
   padding: 0.5rem 0.6rem;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
