@@ -9,6 +9,23 @@ import AccountLoginPanel from "./components/AccountLoginPanel.jsx";
 import AdminActions from "./components/AdminActions.jsx";
 import LeadsView from "./components/LeadsView.jsx";
 import VideoBackground from "./components/VideoBackground.jsx";
+
+function accountDisplay(acc) {
+  if (!acc) return "";
+  const digits = (acc.phone || "").replace(/\D/g, "");
+  const tail = digits ? digits.slice(-4) : "";
+  return tail ? `${acc.id} (...${tail})` : acc.id;
+}
+
+function accountStatusMeta(acc, t) {
+  const status = (acc?.status || "").toUpperCase();
+  if (acc?.enabled === false) return { label: t("status_disabled"), cls: "status-disabled", title: t("status_title_disabled") };
+  if (status === "ACTIVE") return { label: t("status_active"), cls: "status-active", title: t("status_title_active") };
+  if (status === "PAUSED") return { label: t("status_paused"), cls: "status-paused", title: t("status_title_paused") };
+  if (status === "NEED_RELOGIN") return { label: t("status_login"), cls: "status-login", title: t("status_title_login") };
+  if (status === "BANNED") return { label: t("status_banned"), cls: "status-banned", title: t("status_title_banned") };
+  return { label: status || t("status_unknown"), cls: "status-paused", title: t("status_title_unknown") };
+}
 const API_BASE = "/api";
 const translations = {
   en: {
@@ -245,6 +262,21 @@ export default function App() {
     localStorage.setItem("auth", JSON.stringify(session));
   };
 
+
+  const toggleAccount = async (acc) => {
+    if (!acc) return;
+    try {
+      await fetchWithAuth(`${API_BASE}/accounts/${encodeURIComponent(acc.id)}/enable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: acc.enabled === false ? true : false }),
+      });
+      const data = await fetchWithAuth(`${API_BASE}/accounts`);
+      setAccounts(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
   const t = (key) => translations[lang]?.[key] || key;
 
   if (!auth) {
@@ -274,25 +306,6 @@ export default function App() {
     <>
       <VideoBackground />
       <div className={`app-root ${activeTab !== "admin" ? "app-compact" : ""}`}>
-        {activeTab === "admin" && (
-          <aside className="sidebar">
-            <AccountsPanel
-              accounts={accounts}
-              selected={selectedAccount}
-              onSelect={handleSelectAccount}
-              authToken={authToken}
-              t={t}
-              refreshAccounts={async () => {
-                try {
-                  const data = await fetchWithAuth(`${API_BASE}/accounts`);
-                  setAccounts(data);
-                } catch (err) {
-                  console.error(err);
-                }
-              }}
-            />
-          </aside>
-        )}
         <main className="main">
           <header className="main-header">
             <div className="header-left">
@@ -391,6 +404,46 @@ export default function App() {
                 />
                 <SettingsPanel authToken={authToken} accounts={accounts} />
                 <AdminActions authToken={authToken} />
+                <div className="account-cards">
+                  <h3>{t("accounts")}</h3>
+                  <div className="account-card-grid">
+                    {accounts.map((acc) => {
+                      const meta = accountStatusMeta(acc, t);
+                      return (
+                        <div key={acc.id} className="account-card">
+                          <div className="account-card-head">
+                            <div className="account-id">{accountDisplay(acc)}</div>
+                            <span className={`status-pill ${meta.cls}`} title={meta.title}>
+                              {meta.label}
+                            </span>
+                          </div>
+                          <div className="account-card-body">
+                            <div className="account-metrics compact">
+                              <span>{t("cold_sent")}: {acc.metrics?.cold_sent || 0}</span>
+                              <span>{t("replies")}: {acc.metrics?.replies_received || 0}</span>
+                            </div>
+                            {acc.ban_reason || acc.last_error ? (
+                              <div className="account-alert">
+                                {acc.ban_reason || acc.last_error}
+                              </div>
+                            ) : null}
+                            {typeof acc.floodwait_seconds === "number" ? (
+                              <div className="account-hint muted">Floodwait: {acc.floodwait_seconds}s</div>
+                            ) : null}
+                          </div>
+                          <div className="account-card-actions">
+                            <button
+                              className={acc.enabled === false ? "toggle toggle-off" : "toggle toggle-on"}
+                              onClick={() => toggleAccount(acc)}
+                            >
+                              {acc.enabled === false ? t("status_disabled") : t("status_active")}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </section>
           )}
