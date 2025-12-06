@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtualenv
+venv/
+*/venv/
+.venv/
+*/.venv/
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+# OS specific
+.DS_Store
+Thumbs.db
+# Project specific
+.env
+sessions/
+*.session
+*.session-journal
+*/data/
+csv_filter.ipynb
+*.log
+*.json
+*.csv
+*.txt
+!requirements.txt
+*.sqlite
+*.sqlite3
+# Test
+.pytest_cache/
+*/tests/
+.tests/
+*/.tests/
+# UI
+node_modules/
+*/node_modules/
+ui/dist/
+ui/.vite/
+ui/.vite/cache/
+data/
+ui/.vite/cache/**
+.coverage
+coverage/

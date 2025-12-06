@@ -1,0 +1,14 @@
+[Unit]
+Description=TG Orchestrator Runner (warmup/outreach/replies)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/tg-dm
+EnvironmentFile=/path/to/tg-dm/.env
+ExecStart=/path/to/tg-dm/venv/bin/python -m src.app.runner
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

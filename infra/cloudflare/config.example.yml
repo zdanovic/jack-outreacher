@@ -1,0 +1,24 @@
+# Cloudflare Tunnel config (UI-focused)
+# 1) cloudflared tunnel create tg-orch
+# 2) cloudflared tunnel route dns tg-orch jackoutreacher.org
+# 3) copy credentials json path from step 1
+
+tunnel: tg-orch
+credentials-file: /Users/you/.cloudflared/TUNNEL_ID.json  # replace with actual path from cloudflared
+
+ingress:
+  # Root domain serves UI (Vite dev or built preview).
+  - hostname: jackoutreacher.org
+    service: http://localhost:5173
+    originRequest:
+      noTLSVerify: true
+  # Proxy /api path on the same host to local FastAPI (8000) so the UI works remotely.
+  - hostname: jackoutreacher.org
+    path: /api/*
+    service: http://localhost:8000
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404
+
+# Optional: if you serve built UI instead of Vite dev, change the service to your static server:
+#   service: http://localhost:4173   # e.g. npm run build && npm run preview

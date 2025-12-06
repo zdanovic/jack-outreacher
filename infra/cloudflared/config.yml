@@ -1,0 +1,7 @@
+tunnel: b9caa491-af28-45b4-aadd-3924484804fd
+ingress:
+  - hostname: jackoutreacher.org
+    service: http://ui:80
+  - hostname: www.jackoutreacher.org
+    service: http://ui:80
+  - service: http_status:404

@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudflare Tunnel for TG Orchestrator UI/API
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared tunnel run tg-orch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

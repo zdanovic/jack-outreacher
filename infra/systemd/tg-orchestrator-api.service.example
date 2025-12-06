@@ -1,0 +1,14 @@
+[Unit]
+Description=TG Orchestrator API (FastAPI + UI backend)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/tg-dm
+EnvironmentFile=/path/to/tg-dm/.env
+ExecStart=/path/to/tg-dm/venv/bin/uvicorn src.app.api:app --host 127.0.0.1 --port 8000 --log-level info
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
