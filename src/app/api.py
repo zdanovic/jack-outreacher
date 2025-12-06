@@ -203,10 +203,15 @@ async def list_accounts(_: AuthUser = Depends(admin_required)) -> List[Dict[str,
     settings = settings_store.get_settings()
     acc_overrides = settings.get("accounts", {}).get("overrides", {})
     result = []
+    now = time.time()
     for acc in _config.accounts:
-        status = await global_state.get_status(acc.id)
+        runtime = await global_state.get_runtime(acc.id)
+        status = runtime.status
         m = metrics.get(acc.id, {})
         enabled = acc_overrides.get(acc.id, {}).get("enabled", True)
+        flood_sec = None
+        if runtime.flood_wait_until:
+            flood_sec = max(0, int(runtime.flood_wait_until - now))
         result.append(
             {
                 "id": acc.id,
@@ -214,6 +219,9 @@ async def list_accounts(_: AuthUser = Depends(admin_required)) -> List[Dict[str,
                 "status": status.name,
                 "enabled": bool(enabled),
                 "metrics": m,
+                "ban_reason": runtime.ban_reason,
+                "last_error": runtime.last_error,
+                "floodwait_seconds": flood_sec,
             }
         )
     return result
@@ -464,10 +472,12 @@ async def list_events(limit: int = 200, _: AuthUser = Depends(admin_required)) -
 @app.post("/accounts/{account_id}/pause")
 async def pause_account(account_id: str, _: AuthUser = Depends(admin_required)) -> Dict[str, str]:
     """
-    Mark an account as PAUSED at the state level.
-    When the orchestrator runs in the same process, this can be
-    extended to stop the corresponding worker.
+    Mark an account as PAUSED at the state level and persist disable override.
     """
+    settings = settings_store.get_settings()
+    overrides = settings.get("accounts", {}).get("overrides", {})
+    overrides[account_id] = {**overrides.get(account_id, {}), "enabled": False}
+    settings_store.update_settings({"accounts": {"overrides": overrides}})
     await global_state.set_status(account_id, AccountStatus.PAUSED)
     return {"id": account_id, "status": AccountStatus.PAUSED.name}
 
@@ -475,8 +485,12 @@ async def pause_account(account_id: str, _: AuthUser = Depends(admin_required)) 
 @app.post("/accounts/{account_id}/resume")
 async def resume_account(account_id: str, _: AuthUser = Depends(admin_required)) -> Dict[str, str]:
     """
-    Mark an account as ACTIVE at the state level.
+    Mark an account as ACTIVE at the state level and persist enable override.
     """
+    settings = settings_store.get_settings()
+    overrides = settings.get("accounts", {}).get("overrides", {})
+    overrides[account_id] = {**overrides.get(account_id, {}), "enabled": True}
+    settings_store.update_settings({"accounts": {"overrides": overrides}})
     await global_state.set_status(account_id, AccountStatus.ACTIVE)
     return {"id": account_id, "status": AccountStatus.ACTIVE.name}
 

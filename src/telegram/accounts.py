@@ -70,11 +70,15 @@ class AccountWorker:
             self._client = wrapper.client
             logger.info("Account %s: connected as %s", self.cfg.id, wrapper.config.phone)
             await global_state.set_status(self.cfg.id, AccountStatus.ACTIVE)
+            await global_state.set_last_error(self.cfg.id, None)
+            await global_state.set_ban_reason(self.cfg.id, None)
+            await global_state.set_floodwait(self.cfg.id, None)
             # Attach reply handler if available.
             if self.reply_engine is not None and self._client is not None:
                 self.reply_engine.attach_to_client(self._client, self.cfg.id)
         except Exception as e:
             logger.error("Account %s: unexpected error during connect: %s", self.cfg.id, e)
+            await global_state.set_last_error(self.cfg.id, str(e))
             await global_state.set_status(self.cfg.id, AccountStatus.PAUSED)
             return
 
@@ -156,6 +160,9 @@ class AccountWorker:
             )
         except RPCError as e:  # type: ignore
             logger.debug("Account %s: RPC error during READ_CHANNEL %s: %s", self.cfg.id, channel, e)
+            if hasattr(e, "seconds"):
+                await global_state.set_floodwait(self.cfg.id, getattr(e, "seconds", None))
+            await global_state.set_last_error(self.cfg.id, str(e))
             await logs_store.log_event(
                 account_id=self.cfg.id,
                 action_type="READ_CHANNEL",
@@ -165,6 +172,7 @@ class AccountWorker:
             )
         except Exception as e:
             logger.debug("Account %s: error during READ_CHANNEL %s: %s", self.cfg.id, channel, e)
+            await global_state.set_last_error(self.cfg.id, str(e))
             await logs_store.log_event(
                 account_id=self.cfg.id,
                 action_type="READ_CHANNEL",

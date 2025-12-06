@@ -24,6 +24,7 @@ class AccountRuntimeState:
     status: AccountStatus = AccountStatus.PAUSED
     cold_sent_today: int = 0
     last_error: Optional[str] = None
+    ban_reason: Optional[str] = None
     flood_wait_until: Optional[float] = None
 
 
@@ -56,6 +57,31 @@ class GlobalState:
     async def get_status(self, account_id: str) -> AccountStatus:
         state = await self.ensure_account(account_id)
         return state.status
+
+
+    async def set_last_error(self, account_id: str, error: Optional[str]) -> None:
+        state = await self.ensure_account(account_id)
+        async with self._lock:
+            state.last_error = error
+
+    async def set_ban_reason(self, account_id: str, reason: Optional[str]) -> None:
+        state = await self.ensure_account(account_id)
+        async with self._lock:
+            state.ban_reason = reason
+            if reason:
+                state.status = AccountStatus.BANNED
+
+    async def set_floodwait(self, account_id: str, seconds_from_now: Optional[float]) -> None:
+        state = await self.ensure_account(account_id)
+        async with self._lock:
+            if seconds_from_now is None:
+                state.flood_wait_until = None
+            else:
+                import time
+                state.flood_wait_until = time.time() + max(0.0, seconds_from_now)
+
+    async def get_runtime(self, account_id: str) -> AccountRuntimeState:
+        return await self.ensure_account(account_id)
 
     async def increment_cold_sent(self, account_id: str, delta: int = 1) -> int:
         state = await self.ensure_account(account_id)
