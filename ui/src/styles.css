@@ -818,7 +818,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  max-height: 420px;
+  max-height: 630px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
