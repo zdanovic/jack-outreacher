@@ -72,24 +72,23 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
     ];
   }, [byDate]);
 
+  const totals = useMemo(() => {
+    const sum = (key) => byDate.reduce((acc, d) => acc + (d[key] || 0), 0);
+    return {
+      cold_sent: sum("cold_sent"),
+      replies: sum("replies_received"),
+      hot: sum("hot_leads"),
+      warm: sum("warm_leads"),
+      warmup: sum("warmup_actions"),
+      flood: sum("floodwait_events"),
+    };
+  }, [byDate]);
+
+
   return (
     <section className="metrics-dashboard">
       <div className="dashboard-header">
-        <div>
-          <h2>{t("dashboard")}</h2>
-        </div>
-        <div className="range-switcher">
-          {[1, 3, 7, 30, 90].map((r) => (
-            <button
-              key={r}
-              className={range === r ? "chip chip-active" : "chip"}
-              onClick={() => setRange(r)}
-              title={`${r}d range`}
-            >
-              {r}d
-            </button>
-          ))}
-        </div>
+        <h2>{t("dashboard")}</h2>
       </div>
 
       <h3>{t("today")}</h3>
@@ -110,6 +109,19 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
           <div className="metric-label">{t("warm")}</div>
           <div className="metric-value">{aggregate.warm}</div>
         </div>
+      </div>
+
+      <div className="range-switcher range-switcher-inline" aria-label="Select range">
+        {[1, 3, 7, 30, 90].map((r) => (
+          <button
+            key={r}
+            className={range === r ? "chip chip-active" : "chip"}
+            onClick={() => setRange(r)}
+            title={`${r}d range`}
+          >
+            {r}d
+          </button>
+        ))}
       </div>
 
       <div className="charts-grid">
@@ -140,6 +152,33 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
           error={error}
           t={t}
         />
+      </div>
+
+      <div className="summary-grid" aria-label="Totals for selected range">
+        <div className="summary-card">
+          <div className="metric-label">{t("cold_sent")} Σ</div>
+          <div className="metric-value">{totals.cold_sent}</div>
+        </div>
+        <div className="summary-card">
+          <div className="metric-label">{t("replies")} Σ</div>
+          <div className="metric-value">{totals.replies}</div>
+        </div>
+        <div className="summary-card">
+          <div className="metric-label">{t("hot")} Σ</div>
+          <div className="metric-value">{totals.hot}</div>
+        </div>
+        <div className="summary-card">
+          <div className="metric-label">{t("warm")} Σ</div>
+          <div className="metric-value">{totals.warm}</div>
+        </div>
+        <div className="summary-card">
+          <div className="metric-label">Warmup Σ</div>
+          <div className="metric-value">{totals.warmup}</div>
+        </div>
+        <div className="summary-card">
+          <div className="metric-label">Floodwait Σ</div>
+          <div className="metric-value">{totals.flood}</div>
+        </div>
       </div>
     </section>
   );
