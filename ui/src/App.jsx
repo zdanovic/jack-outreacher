@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import AccountsPanel from "./components/AccountsPanel.jsx";
 import MetricsDashboard from "./components/MetricsDashboard.jsx";
 import LogsView from "./components/LogsView.jsx";
@@ -25,6 +25,8 @@ function accountStatusMeta(acc, t) {
   return { label: status || t("status_unknown"), cls: "status-paused", title: t("status_title_unknown") };
 }
 const API_BASE = "/api";
+const POLL_INTERVAL = Number(import.meta.env.VITE_POLL_INTERVAL_MS || 8000);
+const LOGS_POLL_INTERVAL = Number(import.meta.env.VITE_LOGS_POLL_INTERVAL_MS || POLL_INTERVAL);
 const translations = {
   en: {
     dashboard: "Dashboard",
@@ -276,6 +278,10 @@ export default function App() {
 
   const authToken = auth?.token || "";
 
+  const envPoll = import.meta.env.VITE_POLL_INTERVAL_MS || "8000";
+  const envLogsPoll = import.meta.env.VITE_LOGS_POLL_INTERVAL_MS || envPoll;
+  const pollRef = React.useRef({ accounts: null, logs: null });
+
   const logout = () => {
     setAuth(null);
     setAccounts([]);
@@ -325,6 +331,31 @@ export default function App() {
       .then(setLogs)
       .catch(console.error);
   }, [auth]);
+
+  useEffect(() => {
+    if (!auth || auth.role !== "admin") return;
+    const clear = () => {
+      if (pollRef.current.logs) {
+        clearInterval(pollRef.current.logs);
+        pollRef.current.logs = null;
+      }
+      if (pollRef.current.accounts) {
+        clearInterval(pollRef.current.accounts);
+        pollRef.current.accounts = null;
+      }
+    };
+    // start polling when admin tab is active
+    if (activeTab === "admin") {
+      pollRef.current.accounts = setInterval(() => {
+        const rangeParam = accountsRange ? `?range=${encodeURIComponent(accountsRange)}` : "";
+        fetchWithAuth(`${API_BASE}/accounts${rangeParam}`).then(setAccounts).catch(console.error);
+      }, POLL_INTERVAL);
+      pollRef.current.logs = setInterval(() => {
+        fetchWithAuth(`${API_BASE}/logs/events?limit=200`).then(setLogs).catch(console.error);
+      }, LOGS_POLL_INTERVAL);
+    }
+    return () => clear();
+  }, [auth, activeTab, accountsRange]);
 
   const handleSelectAccount = (acc) => {
     setSelectedAccount(acc);
@@ -484,6 +515,7 @@ export default function App() {
             <section className="main-content">
               <div className="main-left">
                 <SettingsPanel authToken={authToken} accounts={accounts} t={t} />
+                <div className="poll-hint muted">Poll: {envPoll} ms · Logs: {envLogsPoll} ms</div>
                 <div className="account-cards">
                   <h3>{t("accounts")}</h3>
                   <div className="account-card-grid">
