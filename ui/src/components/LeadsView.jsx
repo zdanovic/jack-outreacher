@@ -168,35 +168,37 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
 
   return (
     <section className="leads-view">
-      <div className="leads-header">
-        <div>
-          <h2>{t("leads_title")}</h2>
-          <p className="muted">{t("leads_sub")}</p>
-        </div>
-        <div className="leads-filters">
-          <div className="filter-block" title={t("filter_last_contact")}>
-            <div className="filter-label">{t("filter_last_contact")}</div>
-            <div className="filter-group">
-              {[7, 30, 90, 180, 365].map((d) => (
-                <button
-                  key={d}
-                  className={days === d ? "chip chip-active" : "chip"}
-                  onClick={() => setDays(d)}
-                >
-                  {d}d
-                </button>
-              ))}
+      <div className="leads-panel">
+        <div className="leads-header">
+          <div>
+            <h2>{t("leads_title")}</h2>
+            <p className="muted">{t("leads_sub")}</p>
+          </div>
+          <div className="leads-filters">
+            <div className="filter-block" title={t("filter_last_contact")}>
+              <div className="filter-label">{t("filter_last_contact")}</div>
+              <div className="filter-group">
+                {[7, 30, 90, 180, 365].map((d) => (
+                  <button
+                    key={d}
+                    className={days === d ? "chip chip-active" : "chip"}
+                    onClick={() => setDays(d)}
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="filter-block search-block" title={t("filter_search")}>
+              <div className="filter-label">{t("filter_search")}</div>
+              <input
+                className="lead-search"
+                placeholder={t("filter_search_ph")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
           </div>
-          <div className="filter-block search-block" title={t("filter_search")}>
-            <div className="filter-label">{t("filter_search")}</div>
-            <input
-              className="lead-search"
-            placeholder={t("filter_search_ph")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
         </div>
       </div>
 
