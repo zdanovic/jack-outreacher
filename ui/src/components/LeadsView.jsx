@@ -172,7 +172,6 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
         <div className="leads-header">
           <div>
             <h2>{t("leads_title")}</h2>
-            <p className="muted">{t("leads_sub")}</p>
           </div>
           <div className="leads-filters">
             <div className="filter-block" title={t("filter_last_contact")}>
@@ -252,8 +251,8 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
         })}
       </div>
 
-      <div className="filter-block filter-block-inline" title="Статусы лидов">
-        <div className="filter-label">Статусы</div>
+      <div className="filter-block filter-block-inline" title={t("statuses_title")}>
+        <div className="filter-label">{t("statuses_title")}</div>
         <div className="filter-group">
           {STATUS_OPTS.map((s) => (
             <button

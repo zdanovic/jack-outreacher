@@ -702,7 +702,7 @@ body {
 .leads-view {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.72rem;
   max-width: 1280px;
   margin: 0 auto;
   width: 100%;
@@ -711,13 +711,13 @@ body {
 .leads-header {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .leads-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.55rem;
+  gap: 0.5rem;
   align-items: start;
 }
 
@@ -752,7 +752,7 @@ body {
 
 .lead-search {
   min-width: 220px;
-  padding: 0.45rem 0.6rem;
+  padding: 0.42rem 0.58rem;
   border-radius: 0.75rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
@@ -764,7 +764,7 @@ body {
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(4, minmax(240px, 1fr));
-  gap: 0.6rem;
+  gap: 0.55rem;
   margin-top: 0.3rem;
 }
 
@@ -790,7 +790,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.55rem 0.75rem;
+  padding: 0.5rem 0.7rem;
   border-bottom: 1px solid #0f172a;
 }
 
@@ -818,7 +818,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  max-height: 630px;
+  max-height: 600px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -826,7 +826,7 @@ body {
 .leads-list {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
 .leads-list h3 {
@@ -836,11 +836,11 @@ body {
 .lead-card {
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius-sm);
-  padding: 0.55rem 0.65rem;
+  padding: 0.5rem 0.6rem;
   background: linear-gradient(160deg, rgba(11, 18, 35, 0.9), rgba(11, 18, 35, 0.7));
   display: flex;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.5rem;
   cursor: pointer;
   transition: border-color 0.2s ease, transform 0.15s ease;
   backdrop-filter: blur(8px);
@@ -1272,7 +1272,7 @@ body {
   background: linear-gradient(155deg, rgba(2, 6, 23, 0.85), rgba(2, 6, 23, 0.72));
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
 .settings-card h3 {
