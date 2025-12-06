@@ -703,6 +703,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .leads-header {
@@ -723,9 +726,9 @@ body {
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.45rem;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius-sm);
-  background: rgba(2, 6, 23, 0.6);
+  background: linear-gradient(150deg, rgba(11, 18, 35, 0.78), rgba(4, 9, 20, 0.7));
 }
 
 .filter-block-inline {
@@ -751,9 +754,11 @@ body {
   min-width: 220px;
   padding: 0.45rem 0.6rem;
   border-radius: 0.75rem;
-  border: 1px solid #1e293b;
-  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   color: #e5e7eb;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .kanban-board {
@@ -791,11 +796,12 @@ body {
 
 .kanban-title {
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .kanban-subtitle {
   color: #94a3b8;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
 }
 
 .kanban-count {
@@ -844,7 +850,7 @@ body {
   border-color: var(--accent-strong);
   background: radial-gradient(circle at top left, #0f172a, var(--bg-surface));
   transform: translateY(-1px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
 }
 
 .lead-card-compact {
@@ -1284,9 +1290,11 @@ body {
 .settings-card input[type="number"] {
   padding: 0.45rem 0.55rem;
   border-radius: 0.5rem;
-  border: 1px solid #1e293b;
-  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   color: #e5e7eb;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .checkbox-line {
@@ -1469,7 +1477,7 @@ body {
   width: min(800px, 90vw);
   max-height: 85vh;
   background: rgba(11, 18, 35, 0.98);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius);
   padding: 1rem;
   display: flex;
@@ -1518,7 +1526,7 @@ body {
   width: 100%;
   min-height: 80px;
   border-radius: 0.6rem;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   background: #0f172a;
   color: var(--text);
   padding: 0.6rem;
@@ -1571,4 +1579,16 @@ body {
   padding: 0.9rem 1rem;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(10px);
+  width: 100%;
+}
+
+.touches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.5rem;
+}
+
+.touch-card {
+  padding: 0.5rem 0.6rem;
+  gap: 0.5rem;
 }
