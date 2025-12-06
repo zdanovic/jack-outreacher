@@ -354,7 +354,6 @@ function LeadCardContent({ lead, accMap, t, palette }) {
         <StatusChip status={lead.status} t={t} palette={palette} />
         {lead.source ? <span className="lead-source chip-soft">{lead.source}</span> : null}
         <span className="lead-tag">{lead.tag || "n/a"}</span>
-        <span className="lead-source">{lead.source || "—"}</span>
         <span className="lead-time">{formatTs(lead.last_contacted_at)}</span>
         <span className="lead-account">{accountLabel(accMap, lead.last_account_id)}</span>
         {lead.fail_reason ? <span className="lead-fail">{lead.fail_reason}</span> : null}
