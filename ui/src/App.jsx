@@ -192,6 +192,7 @@ export default function App() {
   });
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
+  const [loginModalAcc, setLoginModalAcc] = useState(null);
   const [logs, setLogs] = useState([]);
   const [landingSummary, setLandingSummary] = useState(null);
   const [clientAccounts, setClientAccounts] = useState([]);
@@ -265,15 +266,18 @@ export default function App() {
 
   const toggleAccount = async (acc) => {
     if (!acc) return;
+    const nextEnabled = acc.enabled === false ? true : false;
+    setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, enabled: nextEnabled } : a)));
     try {
       await fetchWithAuth(`${API_BASE}/accounts/${encodeURIComponent(acc.id)}/enable`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: acc.enabled === false ? true : false }),
+        body: JSON.stringify({ enabled: nextEnabled }),
       });
       const data = await fetchWithAuth(`${API_BASE}/accounts`);
       setAccounts(data);
     } catch (err) {
+      setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, enabled: acc.enabled } : a)));
       console.error(err);
     }
   };
@@ -409,35 +413,49 @@ export default function App() {
                   <div className="account-card-grid">
                     {accounts.map((acc) => {
                       const meta = accountStatusMeta(acc, t);
+                      const enabled = acc.enabled !== false;
                       return (
-                        <div key={acc.id} className="account-card">
+                        <div
+                          key={acc.id}
+                          className="account-card"
+                          onClick={() => setLoginModalAcc(acc)}
+                        >
                           <div className="account-card-head">
                             <div className="account-id">{accountDisplay(acc)}</div>
-                            <span className={`status-pill ${meta.cls}`} title={meta.title}>
-                              {meta.label}
-                            </span>
+                            <div className="account-head-actions">
+                              <span className={`status-pill ${meta.cls}`} title={meta.title}>
+                                {meta.label}
+                              </span>
+                              <label
+                                className="switch"
+                                title={enabled ? t("status_active") : t("status_disabled")}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={() => toggleAccount(acc)}
+                                />
+                                <span className="slider" />
+                              </label>
+                            </div>
                           </div>
                           <div className="account-card-body">
                             <div className="account-metrics compact">
                               <span>{t("cold_sent")}: {acc.metrics?.cold_sent || 0}</span>
                               <span>{t("replies")}: {acc.metrics?.replies_received || 0}</span>
+                              <span>Floodwaits: {acc.metrics?.floodwait_events || 0}</span>
                             </div>
                             {acc.ban_reason || acc.last_error ? (
                               <div className="account-alert">
                                 {acc.ban_reason || acc.last_error}
                               </div>
                             ) : null}
-                            {typeof acc.floodwait_seconds === "number" ? (
-                              <div className="account-hint muted">Floodwait: {acc.floodwait_seconds}s</div>
-                            ) : null}
-                          </div>
-                          <div className="account-card-actions">
-                            <button
-                              className={acc.enabled === false ? "toggle toggle-off" : "toggle toggle-on"}
-                              onClick={() => toggleAccount(acc)}
-                            >
-                              {acc.enabled === false ? t("status_disabled") : t("status_active")}
-                            </button>
+                            <div className="account-hint muted">
+                              {typeof acc.floodwait_seconds === "number"
+                                ? `Floodwait: ${acc.floodwait_seconds}s`
+                                : "Floodwait: —"}
+                            </div>
                           </div>
                         </div>
                       );
@@ -447,6 +465,28 @@ export default function App() {
               </div>
             </section>
           )}
+              {loginModalAcc && (
+        <div className="modal-backdrop" onClick={() => setLoginModalAcc(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <AccountLoginPanel
+              account={loginModalAcc}
+              authToken={authToken}
+              refreshAccounts={async () => {
+                try {
+                  const data = await fetchWithAuth(`${API_BASE}/accounts`);
+                  setAccounts(data);
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+            />
+            <div className="modal-actions" style={{ justifyContent: "flex-end" }}>
+              <button className="toggle toggle-off" onClick={() => setLoginModalAcc(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
         </main>
       </div>
     </>

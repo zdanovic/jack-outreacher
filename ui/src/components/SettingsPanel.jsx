@@ -30,18 +30,6 @@ export default function SettingsPanel({ authToken, accounts }) {
     }));
   };
 
-  const toggleAccount = (accountId) => {
-    setSettings((prev) => {
-      const overrides = { ...(prev?.accounts?.overrides || {}) };
-      const current = overrides[accountId] || { enabled: true };
-      overrides[accountId] = { enabled: !current.enabled };
-      return {
-        ...prev,
-        accounts: { overrides },
-      };
-    });
-  };
-
   const save = async () => {
     if (!settings) return;
     setSaving(true);
@@ -237,31 +225,6 @@ export default function SettingsPanel({ authToken, accounts }) {
           </label>
         </div>
 
-        <div className="settings-card">
-          <h3>Accounts</h3>
-          <div className="setting-hint">
-            Мгновенно выключить/включить аккаунт без правки .env. Статус обновится сразу.
-          </div>
-          <div className="account-toggle-list">
-            {accounts.map((acc) => {
-              const overrides = settings.accounts?.overrides || {};
-              const enabled = overrides[acc.id]?.enabled ?? true;
-              return (
-                <div key={acc.id} className="account-toggle">
-                  <span>{accountLabel(acc.id)}</span>
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={enabled}
-                      onChange={() => toggleAccount(acc.id)}
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
     </section>
   );

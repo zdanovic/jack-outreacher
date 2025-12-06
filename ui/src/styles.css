@@ -1629,6 +1629,12 @@ body {
   gap: 0.5rem;
 }
 
+.account-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .account-card-body {
   display: flex;
   flex-direction: column;
