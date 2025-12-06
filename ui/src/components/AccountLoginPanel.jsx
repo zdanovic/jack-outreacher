@@ -8,15 +8,6 @@ export default function AccountLoginPanel({ account, authToken, refreshAccounts 
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  if (!account) {
-    return (
-      <section className="settings-panel">
-        <h3>Account login & control</h3>
-        <p className="muted">Выбери аккаунт слева, чтобы отправить код и войти.</p>
-      </section>
-    );
-  }
-
   const headers = authToken ? { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
 
   const sendCode = async () => {

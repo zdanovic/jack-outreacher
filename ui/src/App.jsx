@@ -6,7 +6,6 @@ import LoginView from "./components/LoginView.jsx";
 import ClientLanding from "./components/ClientLanding.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import AccountLoginPanel from "./components/AccountLoginPanel.jsx";
-import AdminActions from "./components/AdminActions.jsx";
 import LeadsView from "./components/LeadsView.jsx";
 import VideoBackground from "./components/VideoBackground.jsx";
 
@@ -19,7 +18,6 @@ function accountDisplay(acc) {
 
 function accountStatusMeta(acc, t) {
   const status = (acc?.status || "").toUpperCase();
-  if (acc?.enabled === false) return { label: t("status_disabled"), cls: "status-disabled", title: t("status_title_disabled") };
   if (status === "ACTIVE") return { label: t("status_active"), cls: "status-active", title: t("status_title_active") };
   if (status === "PAUSED") return { label: t("status_paused"), cls: "status-paused", title: t("status_title_paused") };
   if (status === "NEED_RELOGIN") return { label: t("status_login"), cls: "status-login", title: t("status_title_login") };
@@ -102,6 +100,43 @@ const translations = {
     metric_replies_hint: "Replies received today",
     metric_hot_hint: "Hot leads in pipeline",
     metric_warm_hint: "Warm leads in pipeline",
+    settings_admin_title: "Settings (admin)",
+    settings_admin_hint: "Limits, warmup, outreach, replies, accounts. Changes apply immediately.",
+    btn_restart: "Restart",
+    btn_restarting: "Restarting…",
+    btn_save: "Save",
+    btn_saving: "Saving…",
+    settings_limits_title: "Limits",
+    settings_limits_hint: "Daily caps for cold outreach and heavy actions.",
+    settings_limits_acc_hint: "Cold messages per account per day",
+    settings_limits_acc: "Max cold per account / day",
+    settings_limits_global_hint: "Global cold messages per day across all accounts",
+    settings_limits_global: "Max cold global / day",
+    settings_limits_heavy_hint: "Parallel heavy actions allowed",
+    settings_limits_heavy: "Max concurrent heavy",
+    settings_warmup_title: "Warmup",
+    settings_warmup_hint: "Intervals and jitter for warmup (reads/chats).",
+    settings_warmup_batch: "Batch interval (s)",
+    settings_warmup_batch_hint: "Pause range between warmup batches",
+    settings_warmup_batch_sub: "min / max seconds between plans",
+    settings_warmup_jitter: "Action jitter (s)",
+    settings_warmup_jitter_hint: "Random delay before warmup actions",
+    settings_warmup_jitter_sub: "min / max seconds before reads",
+    settings_warmup_bot: "Bot read chance (0-1)",
+    settings_warmup_bot_hint: "Probability to read bots/users to diversify channel reads",
+    settings_outreach_title: "Outreach",
+    settings_outreach_hint: "Cold DMs: enable/disable and tune pacing.",
+    settings_outreach_enable: "Enable outreach",
+    settings_outreach_interval: "Send interval (s)",
+    settings_outreach_interval_hint: "Delay range between cold sends",
+    settings_outreach_interval_sub: "min / max seconds between sends",
+    settings_outreach_batch_hint: "Cold sends per planning batch",
+    settings_outreach_batch: "Max per batch",
+    settings_replies_title: "Replies",
+    settings_replies_hint: "Auto-replies and lead qualification.",
+    settings_replies_enable: "Enable replies",
+    warmup_actions_label: "Warmup",
+    floodwaits_label: "Floodwaits",
   },
   ru: {
     dashboard: "Дашборд",
@@ -177,6 +212,43 @@ const translations = {
     metric_replies_hint: "Ответы за сегодня",
     metric_hot_hint: "Горячих лидов в работе",
     metric_warm_hint: "Тёплых лидов в работе",
+    settings_admin_title: "Настройки (админ)",
+    settings_admin_hint: "Лимиты, прогрев, исходящие, ответы, аккаунты. Применяется сразу.",
+    btn_restart: "Рестарт",
+    btn_restarting: "Рестарт…",
+    btn_save: "Сохранить",
+    btn_saving: "Сохраняем…",
+    settings_limits_title: "Лимиты",
+    settings_limits_hint: "Дневные ограничения на холодные исходящие и тяжёлые действия.",
+    settings_limits_acc_hint: "Сколько холодных сообщений на аккаунт в день",
+    settings_limits_acc: "Макс. холодных на аккаунт / день",
+    settings_limits_global_hint: "Общий лимит холодных сообщений на все аккаунты за день",
+    settings_limits_global: "Макс. холодных глобально / день",
+    settings_limits_heavy_hint: "Параллельные тяжёлые действия",
+    settings_limits_heavy: "Макс. тяжёлых одновременно",
+    settings_warmup_title: "Прогрев",
+    settings_warmup_hint: "Интервалы и джиттер прогрева (чтение каналов/диалогов).",
+    settings_warmup_batch: "Интервал пачек (с)",
+    settings_warmup_batch_hint: "Диапазон паузы между пакетами прогрева",
+    settings_warmup_batch_sub: "мин / макс секунд между планами",
+    settings_warmup_jitter: "Джиттер действий (с)",
+    settings_warmup_jitter_hint: "Случайная задержка перед действиями прогрева",
+    settings_warmup_jitter_sub: "мин / макс секунд перед чтением",
+    settings_warmup_bot: "Вероятность чтения ботов (0-1)",
+    settings_warmup_bot_hint: "Шанс разбавить чтение каналов чтением ботов/юзеров",
+    settings_outreach_title: "Исходящие",
+    settings_outreach_hint: "Холодные DM: включить/выключить и настроить частоту.",
+    settings_outreach_enable: "Включить исходящие",
+    settings_outreach_interval: "Интервал отправок (с)",
+    settings_outreach_interval_hint: "Диапазон задержки между холодными отправками",
+    settings_outreach_interval_sub: "мин / макс секунд между отправками",
+    settings_outreach_batch_hint: "Сколько холодных отправок за один цикл планирования",
+    settings_outreach_batch: "Макс. за цикл",
+    settings_replies_title: "Ответы",
+    settings_replies_hint: "Автоответы и квалификация лидов.",
+    settings_replies_enable: "Включить ответы",
+    warmup_actions_label: "Прогрев",
+    floodwaits_label: "Floodwait",
   },
 };
 
@@ -265,17 +337,28 @@ export default function App() {
 
 
   const toggleAccount = async (acc) => {
-    if (!acc) return;
-    const nextEnabled = acc.enabled === false ? true : false;
-    setAccounts((prev) => prev.map((a) => (a.id === acc.id ? { ...a, enabled: nextEnabled } : a)));
+    if (!acc || acc.id == null) return;
+    const accId = String(acc.id);
+    const status = (acc.status || "").toUpperCase();
+    const willPause = status !== "PAUSED";
+
+    // optimistic: flip status locally
+    setAccounts((prev) =>
+      prev.map((a) =>
+        a.id === acc.id
+          ? { ...a, status: willPause ? "PAUSED" : "ACTIVE" }
+          : a
+      )
+    );
+
     try {
-      const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(acc.id)}/enable`, {
+      const endpoint = willPause ? "pause" : "resume";
+      const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(accId)}/${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({ enabled: nextEnabled }),
       });
       if (!resp.ok) {
         console.error("Toggle failed", resp.status);
@@ -400,26 +483,14 @@ export default function App() {
           {activeTab === "admin" && auth.role === "admin" && (
             <section className="main-content">
               <div className="main-left">
-                <AccountLoginPanel
-                  account={selectedAccount}
-                  authToken={authToken}
-                  refreshAccounts={async () => {
-                    try {
-                      const data = await fetchWithAuth(`${API_BASE}/accounts`);
-                      setAccounts(data);
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  }}
-                />
-                <SettingsPanel authToken={authToken} accounts={accounts} />
-                <AdminActions authToken={authToken} />
+                <SettingsPanel authToken={authToken} accounts={accounts} t={t} />
                 <div className="account-cards">
                   <h3>{t("accounts")}</h3>
                   <div className="account-card-grid">
                     {accounts.map((acc) => {
+                      if (!acc || acc.id == null) return null;
                       const meta = accountStatusMeta(acc, t);
-                      const enabled = acc.enabled !== false;
+                      const switchOn = (acc.status || "").toUpperCase() !== "PAUSED";
                       return (
                         <div
                           key={acc.id}
@@ -434,12 +505,12 @@ export default function App() {
                               </span>
                               <label
                                 className="switch"
-                                title={enabled ? t("status_active") : t("status_disabled")}
+                                title={switchOn ? t("status_active") : t("status_disabled")}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <input
                                   type="checkbox"
-                                  checked={enabled}
+                                  checked={switchOn}
                                   onChange={() => toggleAccount(acc)}
                                 />
                                 <span className="slider" />
@@ -447,10 +518,13 @@ export default function App() {
                             </div>
                           </div>
                           <div className="account-card-body">
-                            <div className="account-metrics compact">
+                            <div className="account-metrics compact account-metrics-grid">
                               <span>{t("cold_sent")}: {acc.metrics?.cold_sent || 0}</span>
                               <span>{t("replies")}: {acc.metrics?.replies_received || 0}</span>
-                              <span>Floodwaits: {acc.metrics?.floodwait_events || 0}</span>
+                              <span>{t("hot")}: {acc.metrics?.hot_leads || 0}</span>
+                              <span>{t("warm")}: {acc.metrics?.warm_leads || 0}</span>
+                              <span>{t("warmup_actions_label", "Warmup")}: {acc.metrics?.warmup_actions || 0}</span>
+                              <span>{t("floodwaits_label", "Floodwaits")}: {acc.metrics?.floodwait_events || 0}</span>
                             </div>
                             {acc.ban_reason || acc.last_error ? (
                               <div className="account-alert">

@@ -212,12 +212,12 @@ body {
   z-index: 1;
   padding: 1.2rem;
   gap: 1rem;
-  max-width: 1360px;
+  max-width: 1380px;
   margin: 0 auto;
 }
 
 .app-compact {
-  max-width: 1480px;
+  max-width: 1380px;
 }
 
 .sidebar {
@@ -377,9 +377,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  width: 100%;
 }
 
 .main-header {
+  width: 100%;
   padding: 1rem 1.2rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 16px;
@@ -478,6 +480,7 @@ body {
   padding: 0.4rem 0.3rem 1rem 0.3rem;
   gap: 1rem;
   align-items: stretch;
+  width: 100%;
 }
 
 .main-left {
@@ -1250,12 +1253,32 @@ body {
 }
 
 .settings-header button {
-  background: #2563eb;
-  border: none;
-  color: #fff;
-  padding: 0.5rem 0.8rem;
-  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #0b1224, #111827);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.55rem;
   cursor: pointer;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.settings-header button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(135deg, #0f172a, #1f2937);
+}
+
+.settings-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.restart-hint {
+  margin-top: 0.35rem;
+  color: #cbd5e1;
+  font-size: 0.9rem;
 }
 
 .settings-grid {
@@ -1646,6 +1669,12 @@ body {
 .account-metrics.compact {
   gap: 0.4rem;
   font-size: 0.82rem;
+}
+
+.account-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.35rem 0.5rem;
 }
 
 .account-alert {

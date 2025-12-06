@@ -2,11 +2,14 @@ import React, { useEffect, useState } from "react";
 
 const API_BASE = "/api";
 
-export default function SettingsPanel({ authToken, accounts }) {
+export default function SettingsPanel({ authToken, accounts, t }) {
+  const tr = (key, fallback) => (typeof t === "function" ? t(key) : null) || fallback || key;
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [restartLoading, setRestartLoading] = useState(false);
+  const [restartMessage, setRestartMessage] = useState(null);
 
   const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
@@ -56,6 +59,25 @@ export default function SettingsPanel({ authToken, accounts }) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const restart = async () => {
+    setRestartLoading(true);
+    setRestartMessage(null);
+    try {
+      const resp = await fetch(`${API_BASE}/admin/restart`, {
+        method: "POST",
+        headers,
+      });
+      const data = await resp.json();
+      setRestartMessage(
+        data.message || tr("restart_status_sent", "Restart request sent. Restart via process manager if needed.")
+      );
+    } catch (err) {
+      setRestartMessage(err.message || tr("restart_status_fail", "Failed to send restart command"));
+    } finally {
+      setRestartLoading(false);
     }
   };
 
@@ -111,37 +133,43 @@ export default function SettingsPanel({ authToken, accounts }) {
     <section className="settings-panel">
       <div className="settings-header">
         <div>
-          <h2>Settings (admin)</h2>
-          <p className="muted">Лимиты, warmup, outreach, ответы, аккаунты. Изменения сохраняются сразу.</p>
+          <h2>{tr("settings_admin_title", "Settings (admin)")}</h2>
+          <p className="muted">{tr("settings_admin_hint", "Limits, warmup, outreach, replies, accounts. Changes apply immediately.")}</p>
         </div>
-        <button onClick={save} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
+        <div className="settings-actions-buttons">
+          <button onClick={restart} disabled={restartLoading}>
+            {restartLoading ? tr("btn_restarting", "Restarting…") : tr("btn_restart", "Restart")}
+          </button>
+          <button onClick={save} disabled={saving}>
+            {saving ? tr("btn_saving", "Saving…") : tr("btn_save", "Save")}
+          </button>
+        </div>
       </div>
       {error && <div className="error">{error}</div>}
+      {restartMessage && <div className="muted restart-hint">{restartMessage}</div>}
 
       <div className="settings-grid">
         <div className="settings-card">
-          <h3>Limits</h3>
-          <div className="setting-hint">Дневные ограничения на холодные исходящие и тяжёлые действия.</div>
-          <label title="Сколько холодных сообщений может отправить один аккаунт за день">
-            <span>Max cold per account / day</span>
+          <h3>{tr("settings_limits_title", "Limits")}</h3>
+          <div className="setting-hint">{tr("settings_limits_hint", "Daily caps for cold outreach and heavy actions.")}</div>
+          <label title={tr("settings_limits_acc_hint", "Cold messages per account per day")}>
+            <span>{tr("settings_limits_acc", "Max cold per account / day")}</span>
             <input
               type="number"
               value={settings.limits?.max_cold_per_account_per_day ?? 0}
               onChange={(e) => updateSection("limits", "max_cold_per_account_per_day", Number(e.target.value))}
             />
           </label>
-          <label title="Общий лимит холодных сообщений на все аккаунты за день">
-            <span>Max cold global / day</span>
+          <label title={tr("settings_limits_global_hint", "Global cold messages per day across all accounts")}>
+            <span>{tr("settings_limits_global", "Max cold global / day")}</span>
             <input
               type="number"
               value={settings.limits?.max_cold_global_per_day ?? 0}
               onChange={(e) => updateSection("limits", "max_cold_global_per_day", Number(e.target.value))}
             />
           </label>
-          <label title="Сколько тяжёлых действий (например, отправок) параллельно">
-            <span>Max concurrent heavy</span>
+          <label title={tr("settings_limits_heavy_hint", "Parallel heavy actions allowed")}>
+            <span>{tr("settings_limits_heavy", "Max concurrent heavy")}</span>
             <input
               type="number"
               value={settings.limits?.max_concurrent_heavy_actions ?? 0}
@@ -151,28 +179,28 @@ export default function SettingsPanel({ authToken, accounts }) {
         </div>
 
         <div className="settings-card">
-          <h3>Warmup</h3>
-          <div className="setting-hint">Интервалы и джиттер прогрева (чтение каналов/диалогов).</div>
+          <h3>{tr("settings_warmup_title", "Warmup")}</h3>
+          <div className="setting-hint">{tr("settings_warmup_hint", "Intervals and jitter for warmup (reads/chats).")}</div>
           <RangeField
-            label="Batch interval (s)"
-            title="Диапазон паузы между пакетами прогрева"
-            hint="min / max секунд между планами"
+            label={tr("settings_warmup_batch", "Batch interval (s)")}
+            title={tr("settings_warmup_batch_hint", "Pause range between warmup batches")}
+            hint={tr("settings_warmup_batch_sub", "min / max seconds between plans")}
             minValue={settings.warmup?.batch_interval_min}
             maxValue={settings.warmup?.batch_interval_max}
             onMinChange={(v) => updateSection("warmup", "batch_interval_min", v)}
             onMaxChange={(v) => updateSection("warmup", "batch_interval_max", v)}
           />
           <RangeField
-            label="Action jitter (s)"
-            title="Случайная задержка перед действиями прогрева"
-            hint="min / max секунд перед чтением"
+            label={tr("settings_warmup_jitter", "Action jitter (s)")}
+            title={tr("settings_warmup_jitter_hint", "Random delay before warmup actions")}
+            hint={tr("settings_warmup_jitter_sub", "min / max seconds before reads")}
             minValue={settings.warmup?.action_jitter_min}
             maxValue={settings.warmup?.action_jitter_max}
             onMinChange={(v) => updateSection("warmup", "action_jitter_min", v)}
             onMaxChange={(v) => updateSection("warmup", "action_jitter_max", v)}
           />
-          <label title="Вероятность читать ботов/юзеров, чтобы разбавить паттерн чтения каналов">
-            <span>Bot read chance (0-1)</span>
+          <label title={tr("settings_warmup_bot_hint", "Probability to read bots/users to diversify channel reads")}>
+            <span>{tr("settings_warmup_bot", "Bot read chance (0-1)")}</span>
             <input
               type="number"
               step="0.05"
@@ -183,27 +211,27 @@ export default function SettingsPanel({ authToken, accounts }) {
         </div>
 
         <div className="settings-card">
-          <h3>Outreach</h3>
-          <div className="setting-hint">Управление холодными DM: включить/выключить и настроить частоту.</div>
+          <h3>{tr("settings_outreach_title", "Outreach")}</h3>
+          <div className="setting-hint">{tr("settings_outreach_hint", "Cold DMs: enable/disable and tune pacing.")}</div>
           <label className="checkbox-line">
             <input
               type="checkbox"
               checked={settings.outreach?.enabled ?? true}
               onChange={(e) => updateSection("outreach", "enabled", e.target.checked)}
             />
-            Enable outreach
+            {tr("settings_outreach_enable", "Enable outreach")}
           </label>
           <RangeField
-            label="Send interval (s)"
-            title="Диапазон задержки между холодными отправками"
-            hint="min / max секунд между отправками"
+            label={tr("settings_outreach_interval", "Send interval (s)")}
+            title={tr("settings_outreach_interval_hint", "Delay range between cold sends")}
+            hint={tr("settings_outreach_interval_sub", "min / max seconds between sends")}
             minValue={settings.outreach?.send_interval_min}
             maxValue={settings.outreach?.send_interval_max}
             onMinChange={(v) => updateSection("outreach", "send_interval_min", v)}
             onMaxChange={(v) => updateSection("outreach", "send_interval_max", v)}
           />
-          <label title="Сколько холодных отправок за один цикл планирования">
-            <span>Max per batch</span>
+          <label title={tr("settings_outreach_batch_hint", "Cold sends per planning batch")}>
+            <span>{tr("settings_outreach_batch", "Max per batch")}</span>
             <input
               type="number"
               value={settings.outreach?.max_per_batch ?? 1}
@@ -213,15 +241,15 @@ export default function SettingsPanel({ authToken, accounts }) {
         </div>
 
         <div className="settings-card">
-          <h3>Replies</h3>
-          <div className="setting-hint">Автоответы и квалификация лидов.</div>
+          <h3>{tr("settings_replies_title", "Replies")}</h3>
+          <div className="setting-hint">{tr("settings_replies_hint", "Auto-replies and lead qualification.")}</div>
           <label className="checkbox-line">
             <input
               type="checkbox"
               checked={settings.replies?.enabled ?? true}
               onChange={(e) => updateSection("replies", "enabled", e.target.checked)}
             />
-            Enable replies
+            {tr("settings_replies_enable", "Enable replies")}
           </label>
         </div>
 

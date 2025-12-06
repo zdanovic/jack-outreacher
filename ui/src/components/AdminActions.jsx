@@ -25,19 +25,22 @@ export default function AdminActions({ authToken }) {
 
   return (
     <section className="settings-panel">
-      <div className="settings-header">
-        <div>
-          <h3>Admin actions</h3>
-          <p className="muted">
-            При смене списка аккаунтов сделай рестарт orchestrator/API через process manager.
-            Если задан ADMIN_RESTART_COMMAND, кнопка ниже запустит его.
-          </p>
+      <div className="settings-actions-inline">
+        <div className="settings-header">
+          <div>
+            <h3>Admin actions</h3>
+            <p className="muted">
+              При смене списка аккаунтов сделай рестарт orchestrator/API через process manager.
+            </p>
+          </div>
         </div>
-        <button onClick={restart} disabled={loading}>
-          {loading ? "Sending…" : "Restart hint"}
-        </button>
+        <div className="settings-actions-buttons">
+          <button onClick={restart} disabled={loading}>
+            {loading ? "Sending…" : "Restart"}
+          </button>
+          {message && <div className="muted">{message}</div>}
+        </div>
       </div>
-      {message && <div className="muted">{message}</div>}
     </section>
   );
 }
