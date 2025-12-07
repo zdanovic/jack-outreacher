@@ -1713,3 +1713,15 @@ body {
 .toggle-off {
   background: linear-gradient(135deg, #475569, #1e293b);
 }
+
+.account-range-switcher .chip {
+  background: linear-gradient(135deg, #0b1224, #111827);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.account-range-switcher .chip-active {
+  background: linear-gradient(135deg, #0f172a, #1f2937);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}

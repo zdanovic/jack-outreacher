@@ -275,6 +275,7 @@ export default function App() {
     const saved = localStorage.getItem("activeTab");
     return saved || "main"; // main | leads | admin
   });
+  const [accountsRange, setAccountsRange] = useState(() => localStorage.getItem("accountsRange") || "30d");
 
   const authToken = auth?.token || "";
 
@@ -320,10 +321,11 @@ export default function App() {
       return;
     }
 
-    fetchWithAuth(`${API_BASE}/accounts`)
+    const rangeParam = accountsRange ? `?range=${encodeURIComponent(accountsRange)}` : "";
+    fetchWithAuth(`${API_BASE}/accounts${rangeParam}`)
       .then(setAccounts)
       .catch(console.error);
-  }, [auth]);
+  }, [auth, accountsRange]);
 
   useEffect(() => {
     if (!auth || auth.role !== "admin") return;
@@ -517,7 +519,24 @@ export default function App() {
                 <SettingsPanel authToken={authToken} accounts={accounts} t={t} />
                 <div className="poll-hint muted">Poll: {envPoll} ms · Logs: {envLogsPoll} ms</div>
                 <div className="account-cards">
-                  <h3>{t("accounts")}</h3>
+                  <div className="account-cards-header">
+                    <h3>{t("accounts")}</h3>
+                    <div className="range-switcher account-range-switcher">
+                      {["1d", "3d", "7d", "30d", "90d"].map((range) => (
+                        <button
+                          key={range}
+                          className={accountsRange === range ? "chip chip-active" : "chip"}
+                          title={`${range} range for metrics`}
+                          onClick={() => {
+                            setAccountsRange(range);
+                            localStorage.setItem("accountsRange", range);
+                          }}
+                        >
+                          {range}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="account-card-grid">
                     {accounts.map((acc) => {
                       if (!acc || acc.id == null) return null;
@@ -563,11 +582,9 @@ export default function App() {
                                 {acc.ban_reason || acc.last_error}
                               </div>
                             ) : null}
-                            <div className="account-hint muted">
-                              {typeof acc.floodwait_seconds === "number"
-                                ? `Floodwait: ${acc.floodwait_seconds}s`
-                                : "Floodwait: —"}
-                            </div>
+                            {typeof acc.floodwait_seconds === "number" ? (
+                              <div className="account-subinfo muted">{`Floodwait: ${acc.floodwait_seconds}s`}</div>
+                            ) : null}
                           </div>
                         </div>
                       );
@@ -585,7 +602,8 @@ export default function App() {
               authToken={authToken}
               refreshAccounts={async () => {
                 try {
-                  const data = await fetchWithAuth(`${API_BASE}/accounts`);
+                  const rangeParam = accountsRange ? `?range=${encodeURIComponent(accountsRange)}` : "";
+                  const data = await fetchWithAuth(`${API_BASE}/accounts${rangeParam}`);
                   setAccounts(data);
                 } catch (err) {
                   console.error(err);
