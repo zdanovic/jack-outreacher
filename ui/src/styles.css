@@ -360,6 +360,13 @@ body {
   color: #94a3b8;
 }
 
+.account-alerts {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .account-status {
   font-size: 0.75rem;
 }

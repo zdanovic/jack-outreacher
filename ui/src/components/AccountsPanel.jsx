@@ -58,6 +58,25 @@ export default function AccountsPanel({ accounts, selected, onSelect, authToken,
                 {t("replies_short")}: {acc.metrics?.replies_received || 0}
               </span>
             </div>
+            {(acc.login_required || acc.ban_reason || acc.last_error) && (
+              <div className="account-alerts">
+                {acc.login_required && (
+                  <span className="status-pill status-login" title={t("status_title_login")}>
+                    {t("login_required")}
+                  </span>
+                )}
+                {acc.ban_reason && (
+                  <span className="status-pill status-banned" title={acc.ban_reason}>
+                    {t("status_banned")}
+                  </span>
+                )}
+                {!acc.ban_reason && acc.last_error && (
+                  <span className="status-pill status-paused" title={acc.last_error}>
+                    {t("last_error")}
+                  </span>
+                )}
+              </div>
+            )}
           </li>
         ))}
       </ul>

@@ -13,6 +13,7 @@ from src.storage.leads_store import LeadsStore
 from src.storage.dialogs_store import DialogsStore
 from src.core.rate_limiter import RateLimiter
 from src.storage import state_db
+from src.core.state import global_state, AccountStatus
 
 
 class DummyClient:
@@ -85,6 +86,41 @@ class AccountWorkerColdDMTest(unittest.TestCase):
         sent_username, sent_text = dummy_client.sent[0]
         self.assertEqual(sent_username, "lead1")
         self.assertTrue(sent_text)  # Either AI text or fallback
+
+    def test_healthcheck_marks_need_relogin_when_unauthorized(self) -> None:
+        # Reset global state for this test.
+        global_state._accounts = {}  # type: ignore[attr-defined]
+
+        cfg = AccountConfig(
+            id="acc2",
+            api_id=12346,
+            api_hash="hash",
+            phone="+100000001",
+            session_name="account2.session",
+            proxy=None,
+            timezone=None,
+            behavior_profile=None,
+        )
+
+        class DummyUnauthorizedClient:
+            async def is_user_authorized(self):
+                return False
+
+            async def get_me(self):  # pragma: no cover
+                raise AssertionError("should not be called")
+
+        worker = AccountWorker(cfg=cfg, client_adapter=None, scheduler=None)  # type: ignore[arg-type]
+        worker._client = DummyUnauthorizedClient()
+
+        import asyncio
+
+        ok = asyncio.run(worker._post_connect_healthcheck())
+        status = asyncio.run(global_state.get_status("acc2"))
+        runtime = asyncio.run(global_state.get_runtime("acc2"))
+
+        self.assertFalse(ok)
+        self.assertEqual(status, AccountStatus.NEED_RELOGIN)
+        self.assertIn("login required", runtime.last_error or "")
 
 
 if __name__ == "__main__":

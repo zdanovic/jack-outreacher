@@ -22,6 +22,19 @@ from ..prompts.opening import OPENING_PROMPT
 from ..prompts.account_legends import ACCOUNT_LEGENDS
 from ..behavior.reply_engine import ReplyEngine
 
+try:  # Telethon-specific errors for better status reporting.
+    from telethon.errors import (  # type: ignore
+        SessionRevokedError,
+        AuthKeyUnregisteredError,
+        UserDeactivatedBanError,
+        UserDeactivatedError,
+    )
+except Exception:  # pragma: no cover
+    class _DummyError(Exception):
+        ...
+
+    SessionRevokedError = AuthKeyUnregisteredError = UserDeactivatedBanError = UserDeactivatedError = _DummyError  # type: ignore
+
 
 logger = logging.getLogger("Orchestrator.Accounts")
 
@@ -57,6 +70,94 @@ class AccountWorker:
         self._outbox_flush_interval_sec = 30.0
         self._last_outbox_flush: float = 0.0
 
+    async def _post_connect_healthcheck(self) -> bool:
+        """
+        Validate session/auth state after connecting.
+        Marks NEED_RELOGIN for missing/invalid sessions and BANNED for deactivated accounts.
+        """
+        if self._client is None:
+            return False
+
+        try:
+            authorized = await self._client.is_user_authorized()
+        except Exception as e:
+            reason = f"authorization_check_failed: {e}"
+            await global_state.set_last_error(self.cfg.id, reason)
+            await global_state.set_status(self.cfg.id, AccountStatus.NEED_RELOGIN)
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="LOGIN_STATE",
+                target=self.cfg.phone,
+                result="error",
+                info=reason,
+            )
+            return False
+
+        if not authorized:
+            reason = "session not authorized; login required"
+            await global_state.set_last_error(self.cfg.id, reason)
+            await global_state.set_status(self.cfg.id, AccountStatus.NEED_RELOGIN)
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="LOGIN_STATE",
+                target=self.cfg.phone,
+                result="need_relogin",
+                info=reason,
+            )
+            return False
+
+        try:
+            me = await self._client.get_me()
+        except (UserDeactivatedBanError, UserDeactivatedError) as e:
+            await global_state.set_ban_reason(self.cfg.id, str(e))
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="LOGIN_STATE",
+                target=self.cfg.phone,
+                result="banned",
+                info=str(e),
+            )
+            return False
+        except (SessionRevokedError, AuthKeyUnregisteredError) as e:
+            reason = f"session invalid: {e}"
+            await global_state.set_last_error(self.cfg.id, reason)
+            await global_state.set_status(self.cfg.id, AccountStatus.NEED_RELOGIN)
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="LOGIN_STATE",
+                target=self.cfg.phone,
+                result="need_relogin",
+                info=reason,
+            )
+            return False
+        except Exception as e:
+            reason = f"account_check_failed: {e}"
+            await global_state.set_last_error(self.cfg.id, reason)
+            await global_state.set_status(self.cfg.id, AccountStatus.PAUSED)
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="LOGIN_STATE",
+                target=self.cfg.phone,
+                result="error",
+                info=reason,
+            )
+            return False
+
+        if me is None:
+            reason = "session invalid (no profile info)"
+            await global_state.set_last_error(self.cfg.id, reason)
+            await global_state.set_status(self.cfg.id, AccountStatus.NEED_RELOGIN)
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="LOGIN_STATE",
+                target=self.cfg.phone,
+                result="need_relogin",
+                info=reason,
+            )
+            return False
+
+        return True
+
     async def run(self) -> None:
         """
         Main loop for this account. In the first iteration we only:
@@ -74,10 +175,13 @@ class AccountWorker:
             wrapper = await self.client_adapter.start_account(self.cfg)
             self._client = wrapper.client
             logger.info("Account %s: connected as %s", self.cfg.id, wrapper.config.phone)
-            await global_state.set_status(self.cfg.id, AccountStatus.ACTIVE)
             await global_state.set_last_error(self.cfg.id, None)
             await global_state.set_ban_reason(self.cfg.id, None)
             await global_state.set_floodwait(self.cfg.id, None)
+            # Post-connect health check to validate session state.
+            if not await self._post_connect_healthcheck():
+                return
+            await global_state.set_status(self.cfg.id, AccountStatus.ACTIVE)
             # Attach reply handler if available.
             if self.reply_engine is not None and self._client is not None:
                 self.reply_engine.attach_to_client(self._client, self.cfg.id)

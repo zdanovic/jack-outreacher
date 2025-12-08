@@ -64,6 +64,8 @@ const translations = {
     status_title_login: "Needs re-login/code",
     status_title_banned: "Banned/logged out",
     status_title_unknown: "State unknown",
+    login_required: "Login required",
+    last_error: "Error",
     leads_title: "Leads",
     leads_sub: "Kanban (warm/hot/deal) + quick search.",
     filter_last_contact: "Last contact",
@@ -176,6 +178,8 @@ const translations = {
     status_title_login: "Нужен повторный логин/код",
     status_title_banned: "Телеграм забанил/логаут",
     status_title_unknown: "Состояние не определено",
+    login_required: "Нужен логин",
+    last_error: "Ошибка",
     leads_title: "Лиды",
     leads_sub: "Канбан (warm/hot/deal) + быстрый поиск.",
     filter_last_contact: "Последний контакт",
@@ -577,9 +581,23 @@ export default function App() {
                               <span>{t("warmup_actions_label", "Warmup")}: {acc.metrics?.warmup_actions || 0}</span>
                               <span>{t("floodwaits_label", "Floodwaits")}: {acc.metrics?.floodwait_events || 0}</span>
                             </div>
-                            {acc.ban_reason || acc.last_error ? (
+                            {(acc.login_required || acc.ban_reason || acc.last_error) ? (
                               <div className="account-alert">
-                                {acc.ban_reason || acc.last_error}
+                                {acc.login_required && (
+                                  <span className="status-pill status-login" title={t("status_title_login")}>
+                                    {t("login_required", "Login required")}
+                                  </span>
+                                )}
+                                {acc.ban_reason && (
+                                  <span className="status-pill status-banned" title={acc.ban_reason}>
+                                    {t("status_banned")}
+                                  </span>
+                                )}
+                                {!acc.ban_reason && acc.last_error && (
+                                  <span className="status-pill status-paused" title={acc.last_error}>
+                                    {t("last_error", "Error")}
+                                  </span>
+                                )}
                               </div>
                             ) : null}
                             {typeof acc.floodwait_seconds === "number" ? (
