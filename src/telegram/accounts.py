@@ -70,6 +70,9 @@ class AccountWorker:
         self._outbox_flush_interval_sec = 30.0
         self._last_outbox_flush: float = 0.0
 
+    def is_running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
     async def _post_connect_healthcheck(self) -> bool:
         """
         Validate session/auth state after connecting.
@@ -593,6 +596,10 @@ class AccountManager:
         if worker:
             await worker.stop()
         await global_state.set_status(account_id, AccountStatus.PAUSED)
+
+    def is_running(self, account_id: str) -> bool:
+        worker = self._workers.get(account_id)
+        return worker.is_running() if worker else False
 
     async def resume_account(self, account_id: str) -> None:
         """

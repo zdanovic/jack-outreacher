@@ -159,6 +159,17 @@ class StateDB:
             """
         )
 
+        # Control flags for cross-process signals (e.g., restart workers).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS control_flags (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TEXT
+            );
+            """
+        )
+
         # Lightweight migrations for existing DBs.
         try:
             cur.execute("ALTER TABLE dialogs ADD COLUMN manual_replied_at TEXT;")
@@ -222,6 +233,31 @@ class StateDB:
             "ban_reason": ban_reason,
             "floodwait_until": floodwait_until,
         }
+
+    # -------- Control flags (cross-process signals) --------
+    def set_control_flag(self, key: str, value: str) -> None:
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO control_flags (key, value, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(key) DO UPDATE SET
+                value=excluded.value,
+                updated_at=datetime('now');
+            """,
+            (key, value),
+        )
+        self.conn.commit()
+
+    def pop_control_flag(self, key: str) -> str | None:
+        cur = self.conn.cursor()
+        row = cur.execute("SELECT value FROM control_flags WHERE key = ?", (key,)).fetchone()
+        if not row:
+            return None
+        value = row[0]
+        cur.execute("DELETE FROM control_flags WHERE key = ?", (key,))
+        self.conn.commit()
+        return value
 
 
 def get_state_db() -> StateDB:

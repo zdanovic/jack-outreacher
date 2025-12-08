@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+import random
+from datetime import datetime
 from typing import Optional
 
 from ..core.config import load_app_config
@@ -15,6 +17,7 @@ from ..core.rate_limiter import RateLimiter
 from ..storage.leads_store import LeadsStore
 from ..storage.dialogs_store import DialogsStore
 from ..storage.settings_store import settings_store
+from ..storage.state_db import get_state_db
 from ..ai.client import AIClient
 
 
@@ -65,6 +68,7 @@ async def main(env_path: Optional[str] = None) -> None:
         dialogs_store=dialogs_store,
         ai_client=ai_client,
     )
+    state_db = get_state_db()
 
     account_manager = AccountManager(
         app_config=cfg,
@@ -148,12 +152,59 @@ async def main(env_path: Optional[str] = None) -> None:
                     await scheduler.add_action(action)
             await asyncio.sleep(outreach_engine.next_batch_interval())
 
+    auto_resume_min = int(os.getenv("AUTO_RESUME_MIN_INTERVAL_SEC", "300"))  # 5 minutes default
+    auto_resume_max = int(os.getenv("AUTO_RESUME_MAX_INTERVAL_SEC", "900"))  # 15 minutes default
+    window_start = int(os.getenv("AUTO_RESUME_START_HOUR", "7"))
+    window_end = int(os.getenv("AUTO_RESUME_END_HOUR", "23"))
+
+    async def auto_resume_loop() -> None:
+        """
+        Ensure workers are running for accounts marked ACTIVE. Runs sparsely,
+        only in the configured hours window, to avoid frequent reconnects.
+        """
+        while True:
+            now = datetime.now()
+            if not (window_start <= now.hour < window_end):
+                await asyncio.sleep(auto_resume_min)
+                continue
+            for acc in cfg.accounts:
+                status = await global_state.get_status(acc.id)
+                if status is not AccountStatus.ACTIVE:
+                    continue
+                if account_manager.is_running(acc.id):
+                    continue
+                try:
+                    await account_manager.resume_account(acc.id)
+                    logger.info("Account %s: auto-resumed worker (ACTIVE + not running).", acc.id)
+                except Exception as e:
+                    logger.error("Account %s: failed to auto-resume: %s", acc.id, e)
+                    await global_state.set_last_error(acc.id, str(e))
+            await asyncio.sleep(random.uniform(auto_resume_min, auto_resume_max))
+
+    async def control_loop() -> None:
+        """
+        React to out-of-process control flags (e.g., restart request).
+        If a restart flag is set, stop workers and exit; restart policy
+        (docker/systemd) will bring the process back up.
+        """
+        while True:
+            restart_flag = state_db.pop_control_flag("restart_workers")
+            if restart_flag is not None:
+                logger.info("Restart flag detected (%s); stopping workers and exiting.", restart_flag)
+                try:
+                    await account_manager.stop_all()
+                finally:
+                    os._exit(0)
+            await asyncio.sleep(10.0)
+
     loop = asyncio.get_running_loop()
     account_manager.start_all(loop)
 
     # Launch background planners.
     loop.create_task(warmup_loop())
     loop.create_task(outreach_loop())
+    loop.create_task(auto_resume_loop())
+    loop.create_task(control_loop())
 
     logger.info("Orchestrator started for %d account(s). Press Ctrl+C to stop.", len(cfg.accounts))
     try:

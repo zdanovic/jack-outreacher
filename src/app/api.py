@@ -44,6 +44,7 @@ _config = load_app_config()
 _db = get_state_db()
 _auth = AuthService(_config.auth)
 _restart_cmd = os.getenv("ADMIN_RESTART_COMMAND")
+_restart_workers_cmd = os.getenv("ADMIN_RESTART_WORKERS_COMMAND")
 _leads_store = LeadsStore()
 _dialogs_store = DialogsStore()
 
@@ -655,6 +656,23 @@ async def admin_restart(_: AuthUser = Depends(admin_required)) -> Dict[str, Any]
     }
 
 
+@app.post("/admin/restart-workers")
+async def admin_restart_workers(_: AuthUser = Depends(admin_required)) -> Dict[str, Any]:
+    """
+    Restart worker processes without touching the API. Intended to be wired to
+    a UI button; uses ADMIN_RESTART_WORKERS_COMMAND if provided.
+    """
+    if _restart_workers_cmd:
+        try:
+            subprocess.Popen(_restart_workers_cmd, shell=True)  # nosec - admin-only endpoint
+            return {"status": "triggered", "message": f"Restart workers command started: {_restart_workers_cmd}"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to run worker restart command: {e}")
+    # Fallback: set a control flag the worker process will consume and exit.
+    _db.set_control_flag("restart_workers", str(int(time.time())))
+    return {"status": "triggered", "message": "Restart flag set; workers will exit and restart via policy."}
+
+
 @app.post("/accounts/{account_id}/dialogs/{username}/reply")
 async def manual_reply(
     account_id: str,
@@ -849,7 +867,25 @@ async def login_verify(
 
     await client.disconnect()
     _login_clients.pop(account_id, None)
-    return {"status": "logged_in"}
+
+    # Clear stale errors and flip status so the orchestrator can auto-resume the worker.
+    await global_state.set_last_error(account_id, None)
+    await global_state.set_ban_reason(account_id, None)
+    await global_state.set_floodwait(account_id, None)
+    settings = settings_store.get_settings() or {}
+    overrides = settings.get("accounts", {}).get("overrides", {}) if isinstance(settings, dict) else {}
+    enabled = overrides.get(account_id, {}).get("enabled", True)
+    new_status = AccountStatus.ACTIVE if enabled else AccountStatus.PAUSED
+    await global_state.set_status(account_id, new_status)
+    await logs_store.log_event(
+        account_id=account_id,
+        action_type="LOGIN_STATE",
+        target=acc.phone,
+        result="ok",
+        info="login_verified",
+    )
+
+    return {"status": "logged_in", "account_status": new_status.name.lower()}
 
 
 if __name__ == "__main__":
