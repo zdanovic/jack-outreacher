@@ -71,6 +71,81 @@ class ManualReplyQueueTest(unittest.TestCase):
         count = cur.fetchone()[0]
         self.assertGreater(count, 0)
 
+    def test_pending_outbox_flushes_when_account_online(self) -> None:
+        try:
+            from src.telegram.accounts import AccountWorker  # type: ignore
+            from src.core.config import AccountConfig  # type: ignore
+            from src.storage.outbox_store import outbox_store  # type: ignore
+            from src.storage.messages_store import messages_store  # type: ignore
+            from src.storage.leads_store import LeadsStore  # type: ignore
+        except Exception:
+            self.skipTest("Core modules not available.")
+            return
+
+        # Isolate DB for this test.
+        test_db = os.path.join(ROOT_DIR, "data", "test_manual_reply_flush.db")
+        if os.path.exists(test_db):
+            os.remove(test_db)
+        from src.storage import state_db  # type: ignore
+
+        state_db.DB_PATH = test_db
+        state_db._db_instance = None  # type: ignore[attr-defined]
+        db = state_db.get_state_db()
+
+        # Re-bind stores to new DB.
+        outbox_store._db = db  # type: ignore[attr-defined]
+        messages_store._db = db  # type: ignore[attr-defined]
+
+        # Seed a lead row to keep status updates consistent.
+        cur = db.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO leads (username, name, tag, source, status)
+            VALUES (?, 'Test', 'eng', 'test', 'failed')
+            ON CONFLICT(username) DO NOTHING;
+            """,
+            ("flush_user",),
+        )
+        db.conn.commit()
+
+        cfg = AccountConfig(
+            id="demo",
+            api_id=123,
+            api_hash="hash",
+            phone="+100000000",
+            session_name="demo.session",
+            proxy=None,
+            timezone=None,
+            behavior_profile=None,
+        )
+        worker = AccountWorker(cfg=cfg, client_adapter=None, scheduler=None)  # type: ignore[arg-type]
+
+        class DummyClient:
+            def __init__(self) -> None:
+                self.sent = []
+
+            async def send_message(self, username: str, text: str) -> None:
+                self.sent.append((username, text))
+
+        worker._client = DummyClient()
+        worker.leads_store = LeadsStore(csv_path=os.path.join(ROOT_DIR, "data", "empty.csv"))
+
+        outbox_id = outbox_store.add_pending(
+            account_id="demo",
+            username="flush_user",
+            direction="out",
+            text="queued text",
+        )
+
+        import asyncio
+
+        asyncio.run(worker._flush_pending_outbox())
+
+        # Verify send occurred and outbox marked sent.
+        cur.execute("SELECT status FROM pending_outbox WHERE id=?", (outbox_id,))
+        status = cur.fetchone()[0]
+        self.assertEqual(status, "sent")
+        self.assertEqual(len(worker._client.sent), 1)
 
 if __name__ == "__main__":
     unittest.main()

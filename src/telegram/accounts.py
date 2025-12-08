@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import random
+import time
+from datetime import datetime
 from typing import Dict, Optional
 
 from ..core.config import AccountConfig, AppConfig
@@ -13,6 +15,7 @@ from ..storage.logs_store import logs_store
 from ..storage.leads_store import LeadsStore
 from ..storage.dialogs_store import DialogsStore, DialogMeta
 from ..storage.messages_store import messages_store
+from ..storage.outbox_store import outbox_store
 from ..core.rate_limiter import RateLimiter
 from ..ai.client import AIClient
 from ..prompts.opening import OPENING_PROMPT
@@ -51,6 +54,8 @@ class AccountWorker:
         self._task: Optional[asyncio.Task] = None
         self._stopped = asyncio.Event()
         self._client = None
+        self._outbox_flush_interval_sec = 30.0
+        self._last_outbox_flush: float = 0.0
 
     async def run(self) -> None:
         """
@@ -82,25 +87,33 @@ class AccountWorker:
             await global_state.set_status(self.cfg.id, AccountStatus.PAUSED)
             return
 
+        # Try to flush any queued manual replies as soon as the account is online.
+        await self._flush_pending_outbox()
+        self._last_outbox_flush = time.time()
+
         # Idle / action loop – later this will execute real actions from the scheduler.
         while not self._stopped.is_set():
             if self.scheduler is None:
                 # No scheduler wired yet – just keep the connection warm.
+                await self._maybe_flush_outbox()
                 await asyncio.sleep(5.0)
                 continue
 
             action = await self.scheduler.next_action(self.cfg.id)
             if action is None:
                 # Nothing planned – short idle before checking again.
+                await self._maybe_flush_outbox()
                 await asyncio.sleep(5.0)
                 continue
 
             if action.type is ActionType.IDLE:
                 # IDLE is represented purely by timing; no extra work needed.
+                await self._maybe_flush_outbox()
                 continue
 
             if self._client is None:
                 logger.warning("Account %s: client not available to execute action %s", self.cfg.id, action.type)
+                await self._maybe_flush_outbox()
                 continue
 
             if action.type is ActionType.READ_CHANNEL:
@@ -116,6 +129,7 @@ class AccountWorker:
                     self.cfg.id,
                     action.type.name,
                 )
+            await self._maybe_flush_outbox()
 
         logger.info("Account %s: worker stopping.", self.cfg.id)
 
@@ -332,15 +346,75 @@ class AccountWorker:
             # Optionally, we could re-open the lead for future attempts.
             if self.leads_store is not None:
                 self.leads_store.update_status(username, "new")
-        except Exception as e:
-            logger.debug("Account %s: error during READ_DIALOG %s: %s", self.cfg.id, peer, e)
-            await logs_store.log_event(
-                account_id=self.cfg.id,
-                action_type="READ_DIALOG",
-                target=str(peer),
-                result="error",
-                info=str(e),
-            )
+
+    async def _flush_pending_outbox(self) -> None:
+        """
+        Deliver queued manual replies for this account when it is online.
+        """
+        if self._client is None:
+            return
+
+        pending = outbox_store.list_pending(self.cfg.id)
+        now = datetime.utcnow()
+        for item in pending:
+            try:
+                send_after = datetime.fromisoformat(item["send_after"]) if item.get("send_after") else None
+                expires_at = datetime.fromisoformat(item["expires_at"]) if item.get("expires_at") else None
+            except Exception:
+                send_after = None
+                expires_at = None
+
+            if send_after and send_after > now:
+                continue
+            if expires_at and expires_at < now:
+                outbox_store.mark_failed(item["id"], "expired")
+                continue
+
+            username = item.get("username")
+            text = item.get("text") or ""
+            if not username:
+                outbox_store.mark_failed(item["id"], "missing_username")
+                continue
+
+            try:
+                await self._client.send_message(username, text)
+                outbox_store.mark_sent(item["id"])
+                messages_store.add_message(
+                    account_id=self.cfg.id,
+                    username=username,
+                    direction=item.get("direction", "out"),
+                    text=text,
+                    ts=None,
+                )
+                await logs_store.log_event(
+                    account_id=self.cfg.id,
+                    action_type="MANUAL_REPLY",
+                    target=str(username),
+                    result="ok",
+                    info="sent_from_queue",
+                )
+                if self.leads_store is not None:
+                    # Clear failed state if it was set during queueing.
+                    self.leads_store.update_status(username, "contacted", fail_reason=None)
+            except Exception as e:
+                outbox_store.mark_failed(item["id"], str(e))
+                await logs_store.log_event(
+                    account_id=self.cfg.id,
+                    action_type="MANUAL_REPLY",
+                    target=str(username),
+                    result="error",
+                    info=str(e),
+                )
+
+    async def _maybe_flush_outbox(self) -> None:
+        """
+        Throttle outbox flushes during the main loop to avoid spamming
+        Telethon with extra sends.
+        """
+        now = time.time()
+        if now - self._last_outbox_flush >= self._outbox_flush_interval_sec:
+            await self._flush_pending_outbox()
+            self._last_outbox_flush = now
 
 
 class AccountManager:

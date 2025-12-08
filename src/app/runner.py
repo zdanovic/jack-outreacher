@@ -18,6 +18,20 @@ from ..storage.settings_store import settings_store
 from ..ai.client import AIClient
 
 
+async def apply_initial_statuses(accounts, settings_provider=settings_store.get_settings) -> None:
+    """
+    Set initial statuses for all configured accounts on startup.
+
+    Accounts are set ACTIVE by default unless an override explicitly
+    disables them. This ensures orchestrator resumes work after restarts.
+    """
+    settings = settings_provider() if settings_provider else {}
+    overrides = settings.get("accounts", {}).get("overrides", {}) if isinstance(settings, dict) else {}
+    for acc in accounts:
+        enabled = overrides.get(acc.id, {}).get("enabled", True)
+        await global_state.set_status(acc.id, AccountStatus.ACTIVE if enabled else AccountStatus.PAUSED)
+
+
 def _setup_logging() -> None:
     level = os.getenv("ORCHESTRATOR_LOG_LEVEL", "INFO").upper()
     logging.basicConfig(
@@ -64,6 +78,8 @@ async def main(env_path: Optional[str] = None) -> None:
         ai_client=ai_client,
         reply_engine=reply_engine,
     )
+
+    await apply_initial_statuses(cfg.accounts)
 
     # Seed scheduler with initial warmup/idling actions so that newly
     # connected accounts start with benign behaviour.

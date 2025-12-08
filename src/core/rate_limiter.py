@@ -33,7 +33,14 @@ class RateLimiter:
             async with self._lock:
                 if today != self._last_reset_date:
                     self._last_reset_date = today
-                    self._global_cold_sent_today = metrics_store.get_today_field_sum("cold_sent")
+                    if self._seed_from_db:
+                        self._global_cold_sent_today = metrics_store.get_today_field_sum("cold_sent")
+                        seed_fn = lambda acc_id: metrics_store.get_today_field(acc_id, "cold_sent")
+                    else:
+                        self._global_cold_sent_today = 0
+                        seed_fn = lambda _acc_id: 0
+                    # Reset per-account counters to today's persisted values (or zero if not seeding).
+                    await global_state.reset_cold_sent_counts(seed_fn)
 
     async def can_send_cold(self, account_id: str) -> bool:
         """

@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 
 class AccountStatus(Enum):
@@ -93,6 +93,16 @@ class GlobalState:
         state = await self.ensure_account(account_id)
         async with self._lock:
             state.cold_sent_today = value
+
+    async def reset_cold_sent_counts(self, seed_fn: Optional[Callable[[str], int]] = None) -> None:
+        """
+        Reset per-account cold_sent_today counters, optionally seeding
+        from an external source (e.g., persisted metrics).
+        """
+        async with self._lock:
+            for acc_id, state in self._accounts.items():
+                seeded = seed_fn(acc_id) if seed_fn else 0
+                state.cold_sent_today = int(seeded) if seeded is not None else 0
 
 
 global_state = GlobalState()
