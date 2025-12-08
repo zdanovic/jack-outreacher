@@ -14,7 +14,17 @@ from threading import Lock
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
+# Prefer external DATA_DIR (e.g., /app/data bind-mounted). Fallback to local src/data.
+_env_data_dir = os.getenv("DATA_DIR")
+_default_external = os.path.abspath(os.path.join(PROJECT_ROOT, "..", "data"))
+if _env_data_dir and os.path.isdir(_env_data_dir):
+    DATA_DIR = _env_data_dir
+elif os.path.isdir(_default_external):
+    DATA_DIR = _default_external
+else:
+    DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
 DB_PATH = os.path.join(DATA_DIR, "orchestrator_state.db")
 
 _db_lock = Lock()

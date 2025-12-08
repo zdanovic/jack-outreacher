@@ -30,7 +30,14 @@ except Exception:  # pragma: no cover
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+_env_data_dir = os.getenv("DATA_DIR")
+_default_external = os.path.abspath(os.path.join(PROJECT_ROOT, "..", "data"))
+if _env_data_dir and os.path.isdir(_env_data_dir):
+    DATA_DIR = _env_data_dir
+elif os.path.isdir(_default_external):
+    DATA_DIR = _default_external
+else:
+    DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 
 # Default timing parameters for warmup planning (seconds).
