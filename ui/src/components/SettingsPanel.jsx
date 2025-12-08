@@ -176,6 +176,22 @@ export default function SettingsPanel({ authToken, accounts, t }) {
               onChange={(e) => updateSection("limits", "max_concurrent_heavy_actions", Number(e.target.value))}
             />
           </label>
+          <label title={tr("settings_limits_interval_hint", "Minimum seconds between cold sends per account (soft throttle)")}>
+            <span>{tr("settings_limits_interval", "Min interval between cold sends (s)")}</span>
+            <input
+              type="number"
+              value={settings.limits?.min_cold_interval_seconds ?? 0}
+              onChange={(e) => updateSection("limits", "min_cold_interval_seconds", Number(e.target.value))}
+            />
+          </label>
+          <label title={tr("settings_limits_hour_hint", "Soft cap per account per hour (0 disables)")}>
+            <span>{tr("settings_limits_hour", "Max cold per hour / account")}</span>
+            <input
+              type="number"
+              value={settings.limits?.max_cold_per_hour_per_account ?? 0}
+              onChange={(e) => updateSection("limits", "max_cold_per_hour_per_account", Number(e.target.value))}
+            />
+          </label>
         </div>
 
         <div className="settings-card">

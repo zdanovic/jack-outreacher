@@ -12,6 +12,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "max_cold_per_account_per_day": 15,
         "max_cold_global_per_day": 80,
         "max_concurrent_heavy_actions": 2,
+        "min_cold_interval_seconds": 0,
+        "max_cold_per_hour_per_account": 0,
         "mode": "conservative",
     },
     "warmup": {

@@ -26,6 +26,9 @@ class LimitsConfig:
     max_cold_per_account_per_day: int = 15
     max_cold_global_per_day: int = 80
     max_concurrent_heavy_actions: int = 2
+    # Soft pacing limits (optional; 0 disables)
+    min_cold_interval_seconds: int = 0
+    max_cold_per_hour_per_account: int = 0
     # Scale knob: conservative / normal / aggressive
     mode: str = "conservative"
 
@@ -184,6 +187,8 @@ def _load_limits_from_env() -> LimitsConfig:
         max_cold_per_account_per_day=_int("MAX_COLD_PER_ACCOUNT_PER_DAY", 15),
         max_cold_global_per_day=_int("MAX_COLD_GLOBAL_PER_DAY", 80),
         max_concurrent_heavy_actions=_int("MAX_CONCURRENT_HEAVY_ACTIONS", 2),
+        min_cold_interval_seconds=_int("MIN_COLD_INTERVAL_SECONDS", 0),
+        max_cold_per_hour_per_account=_int("MAX_COLD_PER_HOUR_PER_ACCOUNT", 0),
         mode=mode,
     )
 

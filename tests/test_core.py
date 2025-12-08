@@ -22,6 +22,8 @@ class RateLimiterTest(unittest.TestCase):
             max_cold_per_account_per_day=2,
             max_cold_global_per_day=3,
             max_concurrent_heavy_actions=1,
+            min_cold_interval_seconds=0,
+            max_cold_per_hour_per_account=0,
             mode="conservative",
         )
         rl = RateLimiter(limits, seed_from_db=False)
@@ -51,6 +53,8 @@ class RateLimiterTest(unittest.TestCase):
             max_cold_per_account_per_day=5,
             max_cold_global_per_day=10,
             max_concurrent_heavy_actions=1,
+            min_cold_interval_seconds=0,
+            max_cold_per_hour_per_account=0,
             mode="conservative",
         )
         rl = RateLimiter(limits, seed_from_db=False)

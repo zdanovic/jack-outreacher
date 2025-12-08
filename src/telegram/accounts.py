@@ -411,6 +411,8 @@ class AccountWorker:
             text = f"Hi {name or username}, wanted to briefly connect here."
 
         try:
+            # Typing delay to mimic human behaviour.
+            await asyncio.sleep(random.uniform(1.0, 3.5))
             await self._client.send_message(username, text)
             await metrics_store.incr(self.cfg.id, "cold_sent", 1)
             messages_store.add_message(
@@ -447,9 +449,9 @@ class AccountWorker:
                 result="error",
                 info=str(e),
             )
-            # Optionally, we could re-open the lead for future attempts.
             if self.leads_store is not None:
-                self.leads_store.update_status(username, "new")
+                # Keep failed leads marked as failed to avoid immediate reuse.
+                self.leads_store.update_status(username, "failed", fail_reason=str(e))
 
     async def _flush_pending_outbox(self) -> None:
         """

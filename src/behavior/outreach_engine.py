@@ -48,6 +48,9 @@ class OutreachEngine:
         max_batch = int(outreach_cfg.get("max_per_batch", max_per_batch))
         max_per_batch = max_batch or max_per_batch
 
+        # Avoid lining up multiple sends at the same second for different accounts.
+        base_delay_jitter = random.uniform(0.0, 30.0)
+
         actions: List[Action] = []
         for _ in range(max_per_batch):
             if not await self._rate_limiter.can_send_cold(account_id):
@@ -57,7 +60,7 @@ class OutreachEngine:
                 break
 
             delay = random.uniform(send_min, send_max)
-            earliest = time.time() + delay
+            earliest = time.time() + delay + base_delay_jitter
             actions.append(
                 Action(
                     account_id=account_id,
@@ -82,4 +85,3 @@ class OutreachEngine:
         send_min = float(outreach_cfg.get("send_interval_min", SEND_INTERVAL_MIN))
         send_max = float(outreach_cfg.get("send_interval_max", SEND_INTERVAL_MAX))
         return random.uniform(send_min, send_max)
-

@@ -22,6 +22,8 @@ class RateLimiter:
         self._global_cold_sent_today: int = metrics_store.get_today_field_sum("cold_sent") if seed_from_db else 0
         self._last_reset_date: str = self._today_str()
         self._seed_from_db = seed_from_db
+        # Recent sends within 1h per account for soft pacing.
+        self._recent_sends: Dict[str, list[float]] = {}
 
     @staticmethod
     def _today_str() -> str:
@@ -41,6 +43,14 @@ class RateLimiter:
                         seed_fn = lambda _acc_id: 0
                     # Reset per-account counters to today's persisted values (or zero if not seeding).
                     await global_state.reset_cold_sent_counts(seed_fn)
+                    self._recent_sends = {}
+
+    def _prune_recent(self, account_id: str) -> list[float]:
+        now = _dt.datetime.now().timestamp()
+        window = now - 3600
+        recents = [ts for ts in self._recent_sends.get(account_id, []) if ts >= window]
+        self._recent_sends[account_id] = recents
+        return recents
 
     async def can_send_cold(self, account_id: str) -> bool:
         """
@@ -52,6 +62,14 @@ class RateLimiter:
             # Global limit check
             if self._global_cold_sent_today >= self._limits.max_cold_global_per_day:
                 return False
+            # Hourly / interval pacing (soft throttle)
+            recents = self._prune_recent(account_id)
+            if self._limits.max_cold_per_hour_per_account and len(recents) >= self._limits.max_cold_per_hour_per_account:
+                return False
+            if self._limits.min_cold_interval_seconds:
+                last_ts = recents[-1] if recents else None
+                if last_ts and (now := _dt.datetime.now().timestamp()) - last_ts < self._limits.min_cold_interval_seconds:
+                    return False
 
         # Per‑account limit check delegated to GlobalState counters.
         current = await global_state.ensure_account(account_id)
@@ -68,6 +86,10 @@ class RateLimiter:
         await self._maybe_reset()
         async with self._lock:
             self._global_cold_sent_today += 1
+            now = _dt.datetime.now().timestamp()
+            recents = self._prune_recent(account_id)
+            recents.append(now)
+            self._recent_sends[account_id] = recents
         await global_state.increment_cold_sent(account_id, 1)
 
     def update_limits(self, limits: LimitsConfig) -> None:

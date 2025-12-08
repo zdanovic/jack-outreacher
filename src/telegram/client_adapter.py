@@ -1,8 +1,10 @@
 import asyncio
+import random
 from dataclasses import dataclass
 from typing import Optional, Any
 
 from ..core.config import AccountConfig
+from ..prompts.defaults import DEVICE_PROFILES
 
 
 @dataclass
@@ -50,9 +52,26 @@ class TelegramClientAdapter:
             if cfg.id in self._clients:
                 return self._clients[cfg.id]
 
+            # Stable device profile per account to diversify fingerprints.
+            profile = random.choice(DEVICE_PROFILES)
+            try:
+                seed = abs(hash(cfg.id)) % len(DEVICE_PROFILES)
+                profile = DEVICE_PROFILES[seed]
+            except Exception:
+                pass
+
             # For now we do not wire proxies; this will be added when
             # the shared proxy management layer is extracted.
-            client = TelegramClient(cfg.session_name, cfg.api_id, cfg.api_hash)
+            client = TelegramClient(
+                cfg.session_name,
+                cfg.api_id,
+                cfg.api_hash,
+                device_model=profile.get("device_model"),
+                system_version=profile.get("system_version"),
+                app_version=profile.get("app_version"),
+                lang_code=profile.get("lang_code"),
+                system_lang_code=profile.get("system_lang_code"),
+            )
             await client.connect()
 
             wrapper = TelegramClientWrapper(config=cfg, client=client)
