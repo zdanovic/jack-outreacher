@@ -451,7 +451,11 @@ async def list_events(limit: int = 200, _: AuthUser = Depends(admin_required)) -
     """
     Return the last `limit` events from the TSV log file.
     """
-    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "events.log.tsv")
+    try:
+        from ..storage.logs_store import DATA_DIR as LOG_DATA_DIR  # align with runtime DATA_DIR
+        path = os.path.join(LOG_DATA_DIR, "events.log.tsv")
+    except Exception:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "events.log.tsv")
     if not os.path.exists(path):
         return []
     lines: List[str] = []
