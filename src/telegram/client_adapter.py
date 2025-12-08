@@ -1,4 +1,5 @@
 import asyncio
+import os
 import random
 from dataclasses import dataclass
 from typing import Optional, Any
@@ -51,6 +52,11 @@ class TelegramClientAdapter:
         async with self._lock:
             if cfg.id in self._clients:
                 return self._clients[cfg.id]
+
+            # Ensure session directory exists to persist auth.
+            session_dir = os.path.dirname(cfg.session_name)
+            if session_dir:
+                os.makedirs(session_dir, exist_ok=True)
 
             # Stable device profile per account to diversify fingerprints.
             profile = random.choice(DEVICE_PROFILES)

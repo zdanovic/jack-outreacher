@@ -805,6 +805,14 @@ async def login_start(account_id: str, _: AuthUser = Depends(admin_required)) ->
     if acc is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    # Ensure session directory exists.
+    try:
+        session_dir = os.path.dirname(acc.session_name)
+        if session_dir:
+            os.makedirs(session_dir, exist_ok=True)
+    except Exception as e:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=f"Failed to prepare session path: {e}")
+
     client = TelegramClient(acc.session_name, acc.api_id, acc.api_hash)  # type: ignore[call-arg]
     await client.connect()
     await client.send_code_request(acc.phone)
