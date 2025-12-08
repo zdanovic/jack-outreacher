@@ -4,6 +4,34 @@ const API_BASE = "/api";
 
 export default function SettingsPanel({ authToken, accounts, t }) {
   const tr = (key, fallback) => (typeof t === "function" ? t(key) : null) || fallback || key;
+  const SAFE_DEFAULTS = {
+    limits: {
+      max_cold_per_account_per_day: 15,
+      max_cold_global_per_day: 80,
+      max_concurrent_heavy_actions: 2,
+      min_cold_interval_seconds: 900, // 15 minutes between cold sends
+      max_cold_per_hour_per_account: 2,
+    },
+    warmup: {
+      batch_interval_min: 300,
+      batch_interval_max: 900,
+      night_batch_interval_min: 900,
+      night_batch_interval_max: 1800,
+      action_jitter_min: 10,
+      action_jitter_max: 120,
+      bot_read_chance: 0.2,
+      quiet_hours_start: 0,
+      quiet_hours_end: 6,
+      max_read_dialogs_per_hour: 2,
+    },
+    outreach: {
+      enabled: true,
+      send_interval_min: 900,
+      send_interval_max: 3600,
+      max_per_batch: 1,
+    },
+    replies: { enabled: true },
+  };
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -103,8 +131,8 @@ export default function SettingsPanel({ authToken, accounts, t }) {
     maxValue,
     onMinChange,
     onMaxChange,
-    minPlaceholder = "min",
-    maxPlaceholder = "max",
+    minPlaceholder = "",
+    maxPlaceholder = "",
     hint,
   }) => (
     <div className="range-field" title={title}>
@@ -115,15 +143,21 @@ export default function SettingsPanel({ authToken, accounts, t }) {
       <div className="range-field-inputs">
         <input
           type="number"
-          value={minValue ?? 0}
+          value={minValue ?? ""}
           placeholder={minPlaceholder}
-          onChange={(e) => onMinChange(Number(e.target.value))}
+          onChange={(e) => {
+            const val = e.target.value;
+            onMinChange(val === "" ? undefined : Number(val));
+          }}
         />
         <input
           type="number"
-          value={maxValue ?? 0}
+          value={maxValue ?? ""}
           placeholder={maxPlaceholder}
-          onChange={(e) => onMaxChange(Number(e.target.value))}
+          onChange={(e) => {
+            const val = e.target.value;
+            onMaxChange(val === "" ? undefined : Number(val));
+          }}
         />
       </div>
     </div>
@@ -156,40 +190,60 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             <span>{tr("settings_limits_acc", "Max cold per account / day")}</span>
             <input
               type="number"
-              value={settings.limits?.max_cold_per_account_per_day ?? 0}
-              onChange={(e) => updateSection("limits", "max_cold_per_account_per_day", Number(e.target.value))}
+              value={settings.limits?.max_cold_per_account_per_day ?? ""}
+              placeholder={SAFE_DEFAULTS.limits.max_cold_per_account_per_day}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("limits", "max_cold_per_account_per_day", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
           <label title={tr("settings_limits_global_hint", "Global cold messages per day across all accounts")}>
             <span>{tr("settings_limits_global", "Max cold global / day")}</span>
             <input
               type="number"
-              value={settings.limits?.max_cold_global_per_day ?? 0}
-              onChange={(e) => updateSection("limits", "max_cold_global_per_day", Number(e.target.value))}
+              value={settings.limits?.max_cold_global_per_day ?? ""}
+              placeholder={SAFE_DEFAULTS.limits.max_cold_global_per_day}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("limits", "max_cold_global_per_day", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
           <label title={tr("settings_limits_heavy_hint", "Parallel heavy actions allowed")}>
             <span>{tr("settings_limits_heavy", "Max concurrent heavy")}</span>
             <input
               type="number"
-              value={settings.limits?.max_concurrent_heavy_actions ?? 0}
-              onChange={(e) => updateSection("limits", "max_concurrent_heavy_actions", Number(e.target.value))}
+              value={settings.limits?.max_concurrent_heavy_actions ?? ""}
+              placeholder={SAFE_DEFAULTS.limits.max_concurrent_heavy_actions}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("limits", "max_concurrent_heavy_actions", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
           <label title={tr("settings_limits_interval_hint", "Minimum seconds between cold sends per account (soft throttle)")}>
             <span>{tr("settings_limits_interval", "Min interval between cold sends (s)")}</span>
             <input
               type="number"
-              value={settings.limits?.min_cold_interval_seconds ?? 0}
-              onChange={(e) => updateSection("limits", "min_cold_interval_seconds", Number(e.target.value))}
+              value={settings.limits?.min_cold_interval_seconds ?? ""}
+              placeholder={SAFE_DEFAULTS.limits.min_cold_interval_seconds}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("limits", "min_cold_interval_seconds", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
           <label title={tr("settings_limits_hour_hint", "Soft cap per account per hour (0 disables)")}>
             <span>{tr("settings_limits_hour", "Max cold per hour / account")}</span>
             <input
               type="number"
-              value={settings.limits?.max_cold_per_hour_per_account ?? 0}
-              onChange={(e) => updateSection("limits", "max_cold_per_hour_per_account", Number(e.target.value))}
+              value={settings.limits?.max_cold_per_hour_per_account ?? ""}
+              placeholder={SAFE_DEFAULTS.limits.max_cold_per_hour_per_account}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("limits", "max_cold_per_hour_per_account", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
         </div>
@@ -203,6 +257,8 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             hint={tr("settings_warmup_batch_sub", "min / max seconds between plans")}
             minValue={settings.warmup?.batch_interval_min}
             maxValue={settings.warmup?.batch_interval_max}
+            minPlaceholder={SAFE_DEFAULTS.warmup.batch_interval_min}
+            maxPlaceholder={SAFE_DEFAULTS.warmup.batch_interval_max}
             onMinChange={(v) => updateSection("warmup", "batch_interval_min", v)}
             onMaxChange={(v) => updateSection("warmup", "batch_interval_max", v)}
           />
@@ -212,6 +268,8 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             hint={tr("settings_warmup_batch_sub", "min / max seconds between plans")}
             minValue={settings.warmup?.night_batch_interval_min}
             maxValue={settings.warmup?.night_batch_interval_max}
+            minPlaceholder={SAFE_DEFAULTS.warmup.night_batch_interval_min}
+            maxPlaceholder={SAFE_DEFAULTS.warmup.night_batch_interval_max}
             onMinChange={(v) => updateSection("warmup", "night_batch_interval_min", v)}
             onMaxChange={(v) => updateSection("warmup", "night_batch_interval_max", v)}
           />
@@ -221,6 +279,8 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             hint={tr("settings_warmup_jitter_sub", "min / max seconds before reads")}
             minValue={settings.warmup?.action_jitter_min}
             maxValue={settings.warmup?.action_jitter_max}
+            minPlaceholder={SAFE_DEFAULTS.warmup.action_jitter_min}
+            maxPlaceholder={SAFE_DEFAULTS.warmup.action_jitter_max}
             onMinChange={(v) => updateSection("warmup", "action_jitter_min", v)}
             onMaxChange={(v) => updateSection("warmup", "action_jitter_max", v)}
           />
@@ -229,8 +289,12 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             <input
               type="number"
               step="0.05"
-              value={settings.warmup?.bot_read_chance ?? 0}
-              onChange={(e) => updateSection("warmup", "bot_read_chance", Number(e.target.value))}
+              value={settings.warmup?.bot_read_chance ?? ""}
+              placeholder={SAFE_DEFAULTS.warmup.bot_read_chance}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("warmup", "bot_read_chance", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
           <label title={tr("settings_warmup_quiet_hint", "Local hours when warmup is slowed down")}>
@@ -240,15 +304,23 @@ export default function SettingsPanel({ authToken, accounts, t }) {
                 type="number"
                 min="0"
                 max="23"
-                value={settings.warmup?.quiet_hours_start ?? 0}
-                onChange={(e) => updateSection("warmup", "quiet_hours_start", Number(e.target.value))}
+                value={settings.warmup?.quiet_hours_start ?? ""}
+                placeholder={SAFE_DEFAULTS.warmup.quiet_hours_start}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  updateSection("warmup", "quiet_hours_start", val === "" ? undefined : Number(val));
+                }}
               />
               <input
                 type="number"
                 min="0"
                 max="23"
-                value={settings.warmup?.quiet_hours_end ?? 7}
-                onChange={(e) => updateSection("warmup", "quiet_hours_end", Number(e.target.value))}
+                value={settings.warmup?.quiet_hours_end ?? ""}
+                placeholder={SAFE_DEFAULTS.warmup.quiet_hours_end}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  updateSection("warmup", "quiet_hours_end", val === "" ? undefined : Number(val));
+                }}
               />
             </div>
           </label>
@@ -256,8 +328,12 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             <span>{tr("settings_warmup_dialogs", "Max dialog reads per hour")}</span>
             <input
               type="number"
-              value={settings.warmup?.max_read_dialogs_per_hour ?? 0}
-              onChange={(e) => updateSection("warmup", "max_read_dialogs_per_hour", Number(e.target.value))}
+              value={settings.warmup?.max_read_dialogs_per_hour ?? ""}
+              placeholder={SAFE_DEFAULTS.warmup.max_read_dialogs_per_hour}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("warmup", "max_read_dialogs_per_hour", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
         </div>
@@ -279,6 +355,8 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             hint={tr("settings_outreach_interval_sub", "min / max seconds between sends")}
             minValue={settings.outreach?.send_interval_min}
             maxValue={settings.outreach?.send_interval_max}
+            minPlaceholder={SAFE_DEFAULTS.outreach.send_interval_min}
+            maxPlaceholder={SAFE_DEFAULTS.outreach.send_interval_max}
             onMinChange={(v) => updateSection("outreach", "send_interval_min", v)}
             onMaxChange={(v) => updateSection("outreach", "send_interval_max", v)}
           />
@@ -286,8 +364,12 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             <span>{tr("settings_outreach_batch", "Max per batch")}</span>
             <input
               type="number"
-              value={settings.outreach?.max_per_batch ?? 1}
-              onChange={(e) => updateSection("outreach", "max_per_batch", Number(e.target.value))}
+              value={settings.outreach?.max_per_batch ?? ""}
+              placeholder={SAFE_DEFAULTS.outreach.max_per_batch}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateSection("outreach", "max_per_batch", val === "" ? undefined : Number(val));
+              }}
             />
           </label>
         </div>
