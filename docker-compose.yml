@@ -10,6 +10,19 @@ services:
       - ./sessions:/app/sessions
     restart: unless-stopped
 
+  worker:
+    build:
+      context: .
+    command: python -m src.app.runner
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./sessions:/app/sessions
+    depends_on:
+      - api
+    restart: unless-stopped
+
   ui:
     build:
       context: ./ui

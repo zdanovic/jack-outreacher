@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Callable, Dict, Optional
 
+from ..storage.state_db import get_state_db
+
 
 class AccountStatus(Enum):
     """High‑level lifecycle state for an account worker."""
@@ -40,12 +42,26 @@ class GlobalState:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._accounts: Dict[str, AccountRuntimeState] = {}
+        self._db = get_state_db()
 
     async def ensure_account(self, account_id: str) -> AccountRuntimeState:
         async with self._lock:
             state = self._accounts.get(account_id)
             if state is None:
-                state = AccountRuntimeState()
+                persisted = self._db.get_account_runtime(account_id)
+                if persisted:
+                    try:
+                        status = AccountStatus[persisted["status"]] if persisted.get("status") else AccountStatus.PAUSED
+                    except Exception:
+                        status = AccountStatus.PAUSED
+                    state = AccountRuntimeState(
+                        status=status,
+                        last_error=persisted.get("last_error"),
+                        ban_reason=persisted.get("ban_reason"),
+                        flood_wait_until=persisted.get("floodwait_until"),
+                    )
+                else:
+                    state = AccountRuntimeState()
                 self._accounts[account_id] = state
             return state
 
@@ -53,6 +69,13 @@ class GlobalState:
         state = await self.ensure_account(account_id)
         async with self._lock:
             state.status = status
+            self._db.upsert_account_runtime(
+                account_id=account_id,
+                status=status.name,
+                last_error=state.last_error,
+                ban_reason=state.ban_reason,
+                floodwait_until=state.flood_wait_until,
+            )
 
     async def get_status(self, account_id: str) -> AccountStatus:
         state = await self.ensure_account(account_id)
@@ -63,6 +86,13 @@ class GlobalState:
         state = await self.ensure_account(account_id)
         async with self._lock:
             state.last_error = error
+            self._db.upsert_account_runtime(
+                account_id=account_id,
+                status=state.status.name,
+                last_error=error,
+                ban_reason=state.ban_reason,
+                floodwait_until=state.flood_wait_until,
+            )
 
     async def set_ban_reason(self, account_id: str, reason: Optional[str]) -> None:
         state = await self.ensure_account(account_id)
@@ -70,6 +100,13 @@ class GlobalState:
             state.ban_reason = reason
             if reason:
                 state.status = AccountStatus.BANNED
+            self._db.upsert_account_runtime(
+                account_id=account_id,
+                status=state.status.name,
+                last_error=state.last_error,
+                ban_reason=state.ban_reason,
+                floodwait_until=state.flood_wait_until,
+            )
 
     async def set_floodwait(self, account_id: str, seconds_from_now: Optional[float]) -> None:
         state = await self.ensure_account(account_id)
@@ -79,6 +116,13 @@ class GlobalState:
             else:
                 import time
                 state.flood_wait_until = time.time() + max(0.0, seconds_from_now)
+            self._db.upsert_account_runtime(
+                account_id=account_id,
+                status=state.status.name,
+                last_error=state.last_error,
+                ban_reason=state.ban_reason,
+                floodwait_until=state.flood_wait_until,
+            )
 
     async def get_runtime(self, account_id: str) -> AccountRuntimeState:
         return await self.ensure_account(account_id)

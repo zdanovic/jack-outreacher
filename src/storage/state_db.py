@@ -146,6 +146,19 @@ class StateDB:
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_attachments_created_at ON attachments(created_at);")
 
+        # Runtime account state for cross-process visibility (API/UI vs worker).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS account_runtime (
+                account_id TEXT PRIMARY KEY,
+                status TEXT,
+                last_error TEXT,
+                ban_reason TEXT,
+                floodwait_until REAL
+            );
+            """
+        )
+
         # Lightweight migrations for existing DBs.
         try:
             cur.execute("ALTER TABLE dialogs ADD COLUMN manual_replied_at TEXT;")
@@ -169,6 +182,46 @@ class StateDB:
             pass
 
         self.conn.commit()
+
+    # -------- Runtime state helpers (statuses/errors/floodwait) --------
+    def upsert_account_runtime(
+        self,
+        account_id: str,
+        status: str | None = None,
+        last_error: str | None = None,
+        ban_reason: str | None = None,
+        floodwait_until: float | None = None,
+    ) -> None:
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO account_runtime (account_id, status, last_error, ban_reason, floodwait_until)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(account_id) DO UPDATE SET
+                status=excluded.status,
+                last_error=excluded.last_error,
+                ban_reason=excluded.ban_reason,
+                floodwait_until=excluded.floodwait_until;
+            """,
+            (account_id, status, last_error, ban_reason, floodwait_until),
+        )
+        self.conn.commit()
+
+    def get_account_runtime(self, account_id: str) -> dict | None:
+        cur = self.conn.cursor()
+        row = cur.execute(
+            "SELECT status, last_error, ban_reason, floodwait_until FROM account_runtime WHERE account_id = ?",
+            (account_id,),
+        ).fetchone()
+        if not row:
+            return None
+        status, last_error, ban_reason, floodwait_until = row
+        return {
+            "status": status,
+            "last_error": last_error,
+            "ban_reason": ban_reason,
+            "floodwait_until": floodwait_until,
+        }
 
 
 def get_state_db() -> StateDB:

@@ -102,6 +102,9 @@ async def main(env_path: Optional[str] = None) -> None:
                 if acc_overrides.get(acc.id, {}).get("enabled") is False:
                     await global_state.set_status(acc.id, AccountStatus.PAUSED)
                     continue
+                # If UI re-enabled an account that was manually paused, bring it back online.
+                if status == AccountStatus.PAUSED:
+                    await global_state.set_status(acc.id, AccountStatus.ACTIVE)
                 for action in warmup_engine.plan_warmup_batch_for_account(acc.id):
                     await scheduler.add_action(action)
             await asyncio.sleep(warmup_engine.next_batch_interval())
@@ -122,6 +125,9 @@ async def main(env_path: Optional[str] = None) -> None:
                 if acc_overrides.get(acc.id, {}).get("enabled") is False:
                     await global_state.set_status(acc.id, AccountStatus.PAUSED)
                     continue
+                # If UI re-enabled an account, resume outreach when not explicitly paused/banned.
+                if status == AccountStatus.PAUSED:
+                    await global_state.set_status(acc.id, AccountStatus.ACTIVE)
                 # Update limits from settings, if present.
                 lim_cfg = settings.get("limits", {})
                 updated_limits = cfg.limits.__class__(

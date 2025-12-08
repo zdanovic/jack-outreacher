@@ -56,6 +56,14 @@ class SettingsStore:
         self._lock = Lock()
         self._init_table()
 
+    def _refresh_db(self) -> None:
+        """
+        Rebind to the current state DB in case callers changed DB_PATH
+        (common in tests). Ensures settings table exists in the new DB.
+        """
+        self._db = get_state_db()
+        self._init_table()
+
     def _init_table(self) -> None:
         cur = self._db.conn.cursor()
         cur.execute(
@@ -91,6 +99,7 @@ class SettingsStore:
 
     def get_settings(self) -> Dict[str, Any]:
         with self._lock:
+            self._refresh_db()
             saved = self._load_raw()
             merged = self._merge(DEFAULT_SETTINGS, saved)
             return merged
@@ -100,6 +109,7 @@ class SettingsStore:
         Deep-merge `partial` into current settings and persist.
         """
         with self._lock:
+            self._refresh_db()
             current = self._merge(DEFAULT_SETTINGS, self._load_raw())
             new_settings = self._merge(current, partial)
             cur = self._db.conn.cursor()
