@@ -207,6 +207,15 @@ export default function SettingsPanel({ authToken, accounts, t }) {
             onMaxChange={(v) => updateSection("warmup", "batch_interval_max", v)}
           />
           <RangeField
+            label={tr("settings_warmup_batch_night", "Batch interval at night (s)")}
+            title={tr("settings_warmup_batch_night_hint", "Longer pauses during quiet hours")}
+            hint={tr("settings_warmup_batch_sub", "min / max seconds between plans")}
+            minValue={settings.warmup?.night_batch_interval_min}
+            maxValue={settings.warmup?.night_batch_interval_max}
+            onMinChange={(v) => updateSection("warmup", "night_batch_interval_min", v)}
+            onMaxChange={(v) => updateSection("warmup", "night_batch_interval_max", v)}
+          />
+          <RangeField
             label={tr("settings_warmup_jitter", "Action jitter (s)")}
             title={tr("settings_warmup_jitter_hint", "Random delay before warmup actions")}
             hint={tr("settings_warmup_jitter_sub", "min / max seconds before reads")}
@@ -222,6 +231,33 @@ export default function SettingsPanel({ authToken, accounts, t }) {
               step="0.05"
               value={settings.warmup?.bot_read_chance ?? 0}
               onChange={(e) => updateSection("warmup", "bot_read_chance", Number(e.target.value))}
+            />
+          </label>
+          <label title={tr("settings_warmup_quiet_hint", "Local hours when warmup is slowed down")}>
+            <span>{tr("settings_warmup_quiet", "Quiet hours (start-end, local)")}</span>
+            <div className="range-field-inputs">
+              <input
+                type="number"
+                min="0"
+                max="23"
+                value={settings.warmup?.quiet_hours_start ?? 0}
+                onChange={(e) => updateSection("warmup", "quiet_hours_start", Number(e.target.value))}
+              />
+              <input
+                type="number"
+                min="0"
+                max="23"
+                value={settings.warmup?.quiet_hours_end ?? 7}
+                onChange={(e) => updateSection("warmup", "quiet_hours_end", Number(e.target.value))}
+              />
+            </div>
+          </label>
+          <label title={tr("settings_warmup_dialogs_hint", "Soft cap on dialog reads per hour")}>
+            <span>{tr("settings_warmup_dialogs", "Max dialog reads per hour")}</span>
+            <input
+              type="number"
+              value={settings.warmup?.max_read_dialogs_per_hour ?? 0}
+              onChange={(e) => updateSection("warmup", "max_read_dialogs_per_hour", Number(e.target.value))}
             />
           </label>
         </div>

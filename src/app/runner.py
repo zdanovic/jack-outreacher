@@ -83,7 +83,7 @@ async def main(env_path: Optional[str] = None) -> None:
 
     # Seed scheduler with initial warmup/idling actions so that newly
     # connected accounts start with benign behaviour.
-    warmup_engine = WarmupEngine(account_ids=[acc.id for acc in cfg.accounts])
+    warmup_engine = WarmupEngine(cfg.accounts)
     for action in warmup_engine.initial_actions():
         await scheduler.add_action(action)
 

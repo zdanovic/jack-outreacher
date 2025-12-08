@@ -18,7 +18,7 @@ from src.storage import state_db
 
 class WarmupEngineTest(unittest.TestCase):
     def test_initial_and_batch_actions(self) -> None:
-        engine = WarmupEngine(account_ids=["acc1", "acc2"])
+        engine = WarmupEngine(["acc1", "acc2"])
         initial = engine.initial_actions()
         self.assertEqual(len(initial), 2)
         self.assertTrue(all(a.type is ActionType.IDLE for a in initial))
@@ -68,4 +68,3 @@ class OutreachEngineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

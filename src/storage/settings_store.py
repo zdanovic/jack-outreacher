@@ -19,9 +19,14 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "warmup": {
         "batch_interval_min": 300.0,
         "batch_interval_max": 900.0,
+        "night_batch_interval_min": 900.0,
+        "night_batch_interval_max": 1800.0,
         "action_jitter_min": 10.0,
         "action_jitter_max": 120.0,
         "bot_read_chance": 0.2,
+        "quiet_hours_start": 0,   # local hour inclusive
+        "quiet_hours_end": 7,     # local hour exclusive
+        "max_read_dialogs_per_hour": 2,
     },
     "outreach": {
         "enabled": True,

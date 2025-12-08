@@ -263,11 +263,12 @@ class AccountWorker:
 
         try:
             entity = await self._client.get_entity(channel)
-            # Get a small number of recent messages.
-            limit = 10
-            await self._client.get_messages(entity, limit=limit)
-            # Brief local pause to emulate reading time.
-            await asyncio.sleep(1.0)
+            # Get a small number of recent messages with read-like pauses.
+            msgs = await self._client.get_messages(entity, limit=10)
+            if msgs:
+                await asyncio.sleep(random.uniform(3.0, 8.0))
+                await self._client.get_messages(entity, limit=5)
+                await asyncio.sleep(random.uniform(5.0, 12.0))
             logger.debug("Account %s: warmup READ_CHANNEL for %s", self.cfg.id, channel)
             await metrics_store.incr(self.cfg.id, "warmup_actions", 1)
             await logs_store.log_event(
@@ -315,9 +316,15 @@ class AccountWorker:
 
         try:
             entity = await self._client.get_entity(peer)
-            limit = 5
-            await self._client.get_messages(entity, limit=limit)
-            await asyncio.sleep(1.0)
+            # Quick peek to ensure there is history; skip if empty to avoid poking new bots.
+            history = await self._client.get_messages(entity, limit=3)
+            if not history:
+                return
+            # Simulate scrolling/reading with a couple of fetches and pauses.
+            await asyncio.sleep(random.uniform(3.0, 8.0))
+            await self._client.get_messages(entity, limit=10)
+            await asyncio.sleep(random.uniform(5.0, 12.0))
+            await self._client.get_messages(entity, limit=5)
             logger.debug("Account %s: warmup READ_DIALOG for %s", self.cfg.id, peer)
             await metrics_store.incr(self.cfg.id, "warmup_actions", 1)
             await logs_store.log_event(

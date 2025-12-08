@@ -3,10 +3,13 @@ from __future__ import annotations
 import os
 import random
 import time
-from typing import Iterable, List, Dict
+from datetime import datetime
+from typing import Iterable, List, Dict, Any
+from zoneinfo import ZoneInfo
 
 from .actions import Action, ActionType
 from ..storage.settings_store import settings_store
+from ..core.config import AccountConfig
 
 try:
     # DEFAULT_CHANNELS provides a diverse set of public channels that are
@@ -46,8 +49,18 @@ class WarmupEngine:
     spending some time "reading" them, interleaved with idle periods.
     """
 
-    def __init__(self, account_ids: Iterable[str]) -> None:
-        self._account_ids = list(account_ids)
+    def __init__(self, accounts: Iterable[Any]) -> None:
+        # Accept AccountConfig or plain ids.
+        self._account_ids: List[str] = []
+        self._account_tz: Dict[str, str] = {}
+        for acc in accounts:
+            if isinstance(acc, AccountConfig):
+                self._account_ids.append(acc.id)
+                if acc.timezone:
+                    self._account_tz[acc.id] = acc.timezone
+            else:
+                self._account_ids.append(str(acc))
+
         self._channels: List[str] = list(DEFAULT_CHANNELS)
         self._bots: List[str] = list(DEFAULT_USERS_OR_BOTS)
 
@@ -65,6 +78,8 @@ class WarmupEngine:
             rng.shuffle(seq)
             self._channel_sequences[acc] = seq
             self._channel_indices[acc] = 0
+        # Track recent dialog reads to limit frequency.
+        self._read_dialog_history: Dict[str, List[float]] = {}
 
     @staticmethod
     def _seed_for_account(account_id: str) -> int:
@@ -130,6 +145,7 @@ class WarmupEngine:
 
         For now this consists of:
         - one READ_CHANNEL action for a random channel
+        - optionally a READ_DIALOG (if allowed)
         - followed by an IDLE gap
         """
         if not self._channels:
@@ -143,10 +159,18 @@ class WarmupEngine:
             rng = random.Random(self._seed_for_account(account_id))
             self._rngs[account_id] = rng
 
-        # Decide scenario: mostly channels, sometimes a bot dialog.
+        # Decide scenario: mostly channels, sometimes a bot dialog (throttled).
         warm = settings_store.get_settings().get("warmup", {})
         bot_chance = float(warm.get("bot_read_chance", 0.2))
         use_bot = self._bots and rng.random() < bot_chance
+        # Throttle dialog reads per hour.
+        max_dialogs_per_hour = int(warm.get("max_read_dialogs_per_hour", 2))
+        now_ts = time.time()
+        hist = self._read_dialog_history.get(account_id, [])
+        hist = [ts for ts in hist if now_ts - ts < 3600]
+        self._read_dialog_history[account_id] = hist
+        if len(hist) >= max_dialogs_per_hour:
+            use_bot = False
 
         # Primary action: READ_CHANNEL from per‑account shuffled sequence.
         seq = self._channel_sequences.get(account_id) or self._channels
@@ -181,6 +205,7 @@ class WarmupEngine:
                     context={"peer": bot},
                 )
             )
+            self._read_dialog_history[account_id].append(now_ts + bot_delay)
 
         actions.append(
             Action(
@@ -197,6 +222,20 @@ class WarmupEngine:
         Return a random delay until the next warmup planning cycle.
         """
         warm = settings_store.get_settings().get("warmup", {})
-        bmin = float(warm.get("batch_interval_min", WARMUP_BATCH_INTERVAL_MIN))
-        bmax = float(warm.get("batch_interval_max", WARMUP_BATCH_INTERVAL_MAX))
+        # Use Belgrade TZ as default; if any account has a timezone set, use the first one.
+        tzname = None
+        if self._account_tz:
+            tzname = list(self._account_tz.values())[0]
+        tz = ZoneInfo(tzname or "Europe/Belgrade")
+        hour = datetime.now(tz).hour
+        quiet_start = int(warm.get("quiet_hours_start", 0))
+        quiet_end = int(warm.get("quiet_hours_end", 7))
+        in_quiet = quiet_start <= hour < quiet_end if quiet_start < quiet_end else (hour >= quiet_start or hour < quiet_end)
+
+        if in_quiet:
+            bmin = float(warm.get("night_batch_interval_min", WARMUP_BATCH_INTERVAL_MIN * 2))
+            bmax = float(warm.get("night_batch_interval_max", WARMUP_BATCH_INTERVAL_MAX * 2))
+        else:
+            bmin = float(warm.get("batch_interval_min", WARMUP_BATCH_INTERVAL_MIN))
+            bmax = float(warm.get("batch_interval_max", WARMUP_BATCH_INTERVAL_MAX))
         return random.uniform(bmin, bmax)
