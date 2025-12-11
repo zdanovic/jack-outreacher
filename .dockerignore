@@ -1,0 +1,22 @@
+# VCS and editor noise
+.git
+.gitignore
+.vscode
+.DS_Store
+
+# Python build artifacts and caches
+__pycache__
+*.py[cod]
+*.so
+*.egg-info
+.pytest_cache
+.venv
+
+# Local runtime/state that is mounted at runtime
+data
+sessions
+.env
+
+# Frontend dependencies and build outputs (not needed in backend image)
+ui/node_modules
+ui/dist

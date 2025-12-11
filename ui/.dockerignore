@@ -1,0 +1,11 @@
+# VCS and editor files
+.git
+.gitignore
+.vscode
+.DS_Store
+
+# Dependency and build artifacts (rebuilt inside the image)
+node_modules
+dist
+npm-debug.log*
+yarn-error.log*
