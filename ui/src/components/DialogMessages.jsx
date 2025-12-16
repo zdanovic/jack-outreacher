@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 const API_BASE = "/api";
 
-export default function DialogMessages({ account, selectedDialog, onSelectDialog, authToken }) {
+export default function DialogMessages({ account, selectedDialog, onSelectDialog, authToken, csrfToken }) {
   const [usernameInput, setUsernameInput] = useState("");
   const [messages, setMessages] = useState([]);
 
@@ -15,7 +15,13 @@ export default function DialogMessages({ account, selectedDialog, onSelectDialog
       `${API_BASE}/accounts/${encodeURIComponent(
         account.id
       )}/dialogs/${encodeURIComponent(selectedDialog)}/messages`
-      , { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} }
+      , {
+        headers: {
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        },
+        credentials: "include",
+      }
     )
       .then((res) => res.json())
       .then(setMessages)

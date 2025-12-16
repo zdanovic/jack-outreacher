@@ -2,13 +2,17 @@ import React, { useState } from "react";
 
 const API_BASE = "/api";
 
-export default function AccountLoginPanel({ account, authToken, refreshAccounts }) {
+export default function AccountLoginPanel({ account, authToken, csrfToken, refreshAccounts }) {
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const headers = authToken ? { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  const headers = {
+    "Content-Type": "application/json",
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+  };
 
   const sendCode = async () => {
     setLoading(true);
@@ -16,6 +20,7 @@ export default function AccountLoginPanel({ account, authToken, refreshAccounts 
     try {
       const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/login/start`, {
         method: "POST",
+        credentials: "include",
         headers,
       });
       if (!resp.ok) {
@@ -38,6 +43,7 @@ export default function AccountLoginPanel({ account, authToken, refreshAccounts 
       if (password) body.password = password;
       const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/login/verify`, {
         method: "POST",
+        credentials: "include",
         headers,
         body: JSON.stringify(body),
       });
@@ -57,6 +63,7 @@ export default function AccountLoginPanel({ account, authToken, refreshAccounts 
   const pause = async () => {
     await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/pause`, {
       method: "POST",
+      credentials: "include",
       headers,
     }).catch(() => {});
     refreshAccounts?.();
@@ -65,6 +72,7 @@ export default function AccountLoginPanel({ account, authToken, refreshAccounts 
   const resume = async () => {
     await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/resume`, {
       method: "POST",
+      credentials: "include",
       headers,
     }).catch(() => {});
     refreshAccounts?.();

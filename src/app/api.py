@@ -13,13 +13,13 @@ shared SQLite state and log files.
 from __future__ import annotations
 
 import os
+import secrets
 import subprocess
 import time
 from datetime import date, timedelta
 from typing import List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Depends, Header, status, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Depends, Header, status, UploadFile, File, Response as FastAPIResponse, Cookie
 from fastapi import Request
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -34,8 +34,12 @@ from .auth import AuthService, AuthUser
 from ..storage.settings_store import settings_store
 from ..storage.outbox_store import outbox_store
 from ..storage.dialogs_store import DialogsStore
-from ..storage.attachments_store import attachments_store
 from ..storage.leads_store import LeadsStore
+
+try:
+    import redis  # type: ignore
+except Exception:  # pragma: no cover
+    redis = None
 
 
 app = FastAPI(title="TG Orchestrator UI API")
@@ -47,6 +51,16 @@ _restart_cmd = os.getenv("ADMIN_RESTART_COMMAND")
 _restart_workers_cmd = os.getenv("ADMIN_RESTART_WORKERS_COMMAND")
 _leads_store = LeadsStore()
 _dialogs_store = DialogsStore()
+_require_https = os.getenv("REQUIRE_HTTPS", "1").strip().lower() not in ("0", "false", "no", "off")
+_REDIS_URL = os.getenv("REDIS_URL")
+_redis_client = None
+_COOKIE_NAME = os.getenv("AUTH_COOKIE_NAME", "auth_token")
+_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "1").strip().lower() not in ("0", "false", "no", "off")
+_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "lax").lower()
+_COOKIE_PATH = "/"
+_CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "csrf_token")
+_REQUIRE_CSRF = os.getenv("REQUIRE_CSRF", "1").strip().lower() not in ("0", "false", "no", "off")
+_REQUIRE_REDIS = os.getenv("REQUIRE_REDIS_RATE_LIMIT", "1").strip().lower() not in ("0", "false", "no", "off")
 
 # Simple in-memory rate limit (best-effort) for auth endpoints.
 _RATE_LIMIT: Dict[str, List[float]] = {}
@@ -54,10 +68,62 @@ _RATE_LIMIT_WINDOW = 60.0
 _RATE_LIMIT_MAX = 10
 
 
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request and request.client else "unknown"
+
+
+def _request_scheme(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto")
+    if proto:
+        first = proto.split(",")[0].strip()
+        if first:
+            return first.lower()
+    return (request.url.scheme or "").lower()
+
+
+def _get_redis():
+    global _redis_client
+    if _redis_client or not (_REDIS_URL and redis):
+        return _redis_client
+    try:
+        _redis_client = redis.Redis.from_url(_REDIS_URL, socket_timeout=0.2, socket_connect_timeout=0.2)  # type: ignore[attr-defined]
+        # verify connectivity early
+        _redis_client.ping()
+    except Exception:
+        _redis_client = None
+    return _redis_client
+
+
+if _REQUIRE_REDIS:
+    if not redis:
+        raise RuntimeError("REQUIRE_REDIS_RATE_LIMIT=1 but redis library is missing.")
+    if not _REDIS_URL:
+        raise RuntimeError("REQUIRE_REDIS_RATE_LIMIT=1 but REDIS_URL is not set.")
+    if _get_redis() is None:
+        raise RuntimeError("REQUIRE_REDIS_RATE_LIMIT=1 but Redis is unreachable.")
+
+
 def _rate_limit(request: Request, key_suffix: str = "") -> None:
-    ip = request.client.host if request and request.client else "unknown"
+    ip = _client_ip(request)
     key = f"{ip}:{key_suffix}"
     now = time.time()
+    r = _get_redis()
+    if r:
+        try:
+            pipe = r.pipeline()
+            pipe.incr(f"ratelimit:{key}")
+            pipe.expire(f"ratelimit:{key}", int(_RATE_LIMIT_WINDOW), nx=True)
+            count, _ = pipe.execute()
+            if int(count) > _RATE_LIMIT_MAX:
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests.")
+            return
+        except Exception:
+            pass
     bucket = _RATE_LIMIT.get(key, [])
     bucket = [t for t in bucket if now - t < _RATE_LIMIT_WINDOW]
     if len(bucket) >= _RATE_LIMIT_MAX:
@@ -66,12 +132,52 @@ def _rate_limit(request: Request, key_suffix: str = "") -> None:
     _RATE_LIMIT[key] = bucket
 
 
+def _set_auth_cookie(resp: FastAPIResponse, token: str) -> None:
+    resp.set_cookie(
+        _COOKIE_NAME,
+        token,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+        path=_COOKIE_PATH,
+    )
+
+
+def _clear_auth_cookie(resp: FastAPIResponse) -> None:
+    resp.delete_cookie(_COOKIE_NAME, path=_COOKIE_PATH)
+
+
+def _set_csrf_cookie(resp: FastAPIResponse, token: str) -> None:
+    resp.set_cookie(
+        _CSRF_COOKIE_NAME,
+        token,
+        httponly=False,  # readable by JS for double-submit
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+        path=_COOKIE_PATH,
+    )
+
+
+def _clear_csrf_cookie(resp: FastAPIResponse) -> None:
+    resp.delete_cookie(_CSRF_COOKIE_NAME, path=_COOKIE_PATH)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Add common security headers for every response.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        # Enforce HTTPS only when a forwarded proto header is present (edge-facing).
+        host = (request.headers.get("host") or "").split(":")[0].lower()
+        proto_header = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+        scheme = _request_scheme(request)
+        if _require_https:
+            if proto_header:
+                if proto_header != "https":
+                    return Response("HTTPS is required for this API.", status_code=status.HTTP_426_UPGRADE_REQUIRED)
+            elif scheme == "http":
+                return Response("HTTPS is required for this API.", status_code=status.HTTP_426_UPGRADE_REQUIRED)
         response: Response = await call_next(request)
         # HSTS (only meaningful over HTTPS/Cloudflare)
         response.headers.setdefault(
@@ -180,9 +286,22 @@ def _require_auth_header(authorization: str | None) -> str:
     return authorization.split(" ", 1)[1]
 
 
-async def current_user(authorization: str | None = Header(None)) -> AuthUser:
-    token = _require_auth_header(authorization) if _config.auth.enabled else None
-    user = _auth.verify_token(token) if token else AuthUser(email="insecure@local", role="admin")
+async def current_user(
+    request: Request,
+    authorization: str | None = Header(None),
+    auth_cookie: str | None = Cookie(default=None, alias=_COOKIE_NAME),
+) -> AuthUser:
+    if not _config.auth.enabled:
+        return AuthUser(email="insecure@local", role="admin")
+
+    token: str | None = None
+    if authorization:
+        token = _require_auth_header(authorization)
+    elif auth_cookie:
+        token = auth_cookie
+    else:
+        token = request.cookies.get(_COOKIE_NAME)
+    user = _auth.verify_token(token) if token else None
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token.")
     return user
@@ -194,7 +313,26 @@ def admin_required(user: AuthUser = Depends(current_user)) -> AuthUser:
     return user
 
 
-def client_or_admin(user: AuthUser = Depends(current_user)) -> AuthUser:
+def _require_csrf(request: Request) -> None:
+    if not _REQUIRE_CSRF:
+        return
+    if request.method.upper() in ("GET", "HEAD", "OPTIONS"):
+        return
+    header_token = request.headers.get("x-csrf-token") or ""
+    cookie_token = request.cookies.get(_CSRF_COOKIE_NAME) or ""
+    if not header_token or not cookie_token or header_token != cookie_token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF validation failed.")
+
+
+def admin_required(request: Request, user: AuthUser = Depends(current_user)) -> AuthUser:  # type: ignore[no-redef]
+    _require_csrf(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only.")
+    return user
+
+
+def client_or_admin(request: Request, user: AuthUser = Depends(current_user)) -> AuthUser:  # type: ignore[no-redef]
+    _require_csrf(request)
     return user
 
 
@@ -519,6 +657,7 @@ class AuthLoginResponse(BaseModel):
     token: str
     role: str
     email: str
+    csrf_token: str | None = None
 
 
 class AuthConfigResponse(BaseModel):
@@ -561,7 +700,7 @@ class ManualReplyBody(BaseModel):
 
 
 @app.post("/auth/login", response_model=AuthLoginResponse)
-async def auth_login(body: AuthLoginRequest, request: Request) -> AuthLoginResponse:
+async def auth_login(body: AuthLoginRequest, request: Request, response: FastAPIResponse) -> AuthLoginResponse:
     """
     Validate email + one-time code and issue an internal HS256 token.
     """
@@ -572,7 +711,26 @@ async def auth_login(body: AuthLoginRequest, request: Request) -> AuthLoginRespo
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or code.")
     role = _auth._role_for_email(body.email) or "client"
-    return AuthLoginResponse(token=token, role=role, email=body.email.lower())
+    csrf_token = secrets.token_urlsafe(32)
+    _set_auth_cookie(response, token)
+    _set_csrf_cookie(response, csrf_token)
+    return AuthLoginResponse(token="", role=role, email=body.email.lower(), csrf_token=csrf_token)
+
+
+@app.post("/auth/logout")
+async def auth_logout(response: FastAPIResponse) -> dict[str, str]:
+    """Clear auth cookie and end session."""
+    _clear_auth_cookie(response)
+    _clear_csrf_cookie(response)
+    return {"status": "ok"}
+
+
+@app.get("/auth/me", response_model=AuthLoginResponse)
+async def auth_me(request: Request, response: FastAPIResponse, user: AuthUser = Depends(current_user)) -> AuthLoginResponse:
+    """Return current authenticated user info and refresh CSRF token."""
+    csrf_token = request.cookies.get(_CSRF_COOKIE_NAME) or secrets.token_urlsafe(32)
+    _set_csrf_cookie(response, csrf_token)
+    return AuthLoginResponse(token="", role=user.role, email=user.email, csrf_token=csrf_token)
 
 
 @app.get("/auth/config", response_model=AuthConfigResponse)
@@ -687,17 +845,8 @@ async def manual_reply(
     status = await global_state.get_status(account_id)
     if not body.text and body.attachment_id is None:
         raise HTTPException(status_code=400, detail="Empty message")
-
     if body.attachment_id is not None:
-        attachment = attachments_store.get(int(body.attachment_id))
-        if not attachment:
-            raise HTTPException(status_code=404, detail="Attachment not found")
-        body.text = (body.text or "").strip()
-        filename = attachment["original_name"] or "file"
-        if body.text:
-            body.text += f" [file: {filename}]"
-        else:
-            body.text = f"[file: {filename}]"
+        raise HTTPException(status_code=400, detail="Attachments are disabled.")
 
     _dialogs_store.mark_manual_reply(username, account_id)
 
@@ -738,17 +887,12 @@ async def upload_attachment(file: UploadFile = File(...), _: AuthUser = Depends(
     Upload a document to the local attachments store. The file is saved on disk;
     DB keeps only metadata. Returned ID can be attached to manual replies.
     """
-    saved = attachments_store.safe_store_upload(file)
-    return saved
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attachment uploads are disabled.")
 
 
 @app.get("/attachments/{attachment_id}")
 async def get_attachment(attachment_id: int, _: AuthUser = Depends(admin_required)):
-    att = attachments_store.get(attachment_id)
-    if not att or not os.path.exists(att["stored_path"]):
-        raise HTTPException(status_code=404, detail="Attachment not found")
-    filename = att["original_name"] or f"attachment_{attachment_id}"
-    return FileResponse(att["stored_path"], media_type=att["mime_type"] or "application/octet-stream", filename=filename)
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attachment download is disabled.")
 
 
 @app.get("/landing/summary")

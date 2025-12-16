@@ -18,9 +18,12 @@ function formatTs(ts) {
   });
 }
 
-export default function LogsView({ logs, authToken, accounts = [], t = (k) => k }) {
+export default function LogsView({ logs, authToken, csrfToken, accounts = [], t = (k) => k }) {
   const [modal, setModal] = useState(null); // {account_id, target, messages, loading, error}
-  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const headers = {
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+  };
 
   const phoneTailMap = useMemo(() => {
     const map = {};
@@ -50,7 +53,7 @@ export default function LogsView({ logs, authToken, accounts = [], t = (k) => k 
     try {
       const resp = await fetch(
         `${API_BASE}/accounts/${encodeURIComponent(log.account_id)}/dialogs/${encodeURIComponent(log.target)}/messages`,
-        { headers }
+        { headers, credentials: "include" }
       );
       const data = await resp.json();
       setModal((prev) => ({ ...prev, messages: data, loading: false }));
@@ -119,7 +122,7 @@ export default function LogsView({ logs, authToken, accounts = [], t = (k) => k 
                   `${API_BASE}/accounts/${encodeURIComponent(modal.account_id)}/dialogs/${encodeURIComponent(
                     modal.target
                   )}/messages`,
-                  { headers }
+                  { headers, credentials: "include" }
                 );
                 const data = await resp.json();
                 setModal((prev) => ({ ...prev, messages: data, loading: false }));
@@ -138,30 +141,7 @@ function LogModal({ modal, onClose, authToken, renderAccountLabel, refreshMessag
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [attachment, setAttachment] = useState(null);
   const headers = authToken ? { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" } : {};
-
-  const uploadFile = async (file) => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const resp = await fetch(`${API_BASE}/attachments/upload`, {
-        method: "POST",
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        body: form,
-      });
-      if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
-      const data = await resp.json();
-      setAttachment(data);
-    } catch (err) {
-      setError(err.message || "Failed to upload file");
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const sendReply = async () => {
     if (!text.trim()) return;
@@ -173,7 +153,8 @@ function LogModal({ modal, onClose, authToken, renderAccountLabel, refreshMessag
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ text, attachment_id: attachment?.id || null }),
+          credentials: "include",
+          body: JSON.stringify({ text }),
         }
       );
       if (!resp.ok) {
@@ -231,14 +212,6 @@ function LogModal({ modal, onClose, authToken, renderAccountLabel, refreshMessag
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <div className="upload-row">
-            <input
-              type="file"
-              onChange={(e) => uploadFile(e.target.files?.[0])}
-              disabled={uploading}
-            />
-            {attachment ? <span className="muted">Прикреплено: {attachment.original_name || "file"}</span> : null}
-          </div>
           {error && <div className="error">{error}</div>}
           <div className="modal-actions">
             <button onClick={sendReply} disabled={sending || !text.trim()}>

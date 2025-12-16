@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const API_BASE = "/api";
 
-export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) {
+export default function MetricsDashboard({ accounts, authToken, csrfToken, t = (k) => k }) {
   const aggregate = accounts.reduce(
     (acc, a) => {
       const m = a.metrics || {};
@@ -27,7 +27,11 @@ export default function MetricsDashboard({ accounts, authToken, t = (k) => k }) 
       setError(null);
       try {
         const resp = await fetch(`${API_BASE}/metrics/timeseries?days=${range}`, {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+          headers: {
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+          },
+          credentials: "include",
         });
         if (resp.status === 404) {
           // API not yet restarted or endpoint missing; show empty data but no crash.

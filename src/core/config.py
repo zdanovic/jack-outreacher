@@ -109,6 +109,13 @@ def _load_env(env_path: Optional[str] = None) -> None:
         load_dotenv()
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 def _load_accounts_from_env() -> List[AccountConfig]:
     """
     Read account configuration from the existing .env format:
@@ -213,6 +220,10 @@ def _load_ai_from_env() -> AIConfig:
         "0",
         "false",
     )
+    allow_external_ai = _bool_env("ALLOW_EXTERNAL_AI", False)
+    if not allow_external_ai:
+        # Explicit opt-in is required to send data to external AI providers.
+        api_key = None
     return AIConfig(
         api_key=api_key,
         model=model,
@@ -273,6 +284,17 @@ def load_app_config(env_path: Optional[str] = None) -> AppConfig:
     behavior = _load_behavior_from_env()
     ai = _load_ai_from_env()
     auth = _load_auth_from_env()
+
+    require_auth = _bool_env("REQUIRE_AUTH", True)
+    if require_auth and not auth.enabled:
+        raise RuntimeError("AUTH_SHARED_SECRET is required (REQUIRE_AUTH=1). Set a strong secret or set REQUIRE_AUTH=0 explicitly.")
+
+    require_encryption = _bool_env("REQUIRE_DATA_ENCRYPTION", True)
+    if require_encryption and not os.getenv("DATA_ENCRYPTION_KEY"):
+        raise RuntimeError("DATA_ENCRYPTION_KEY is required (REQUIRE_DATA_ENCRYPTION=1) to protect stored messages.")
+    require_redis = _bool_env("REQUIRE_REDIS_RATE_LIMIT", False)
+    if require_redis and not os.getenv("REDIS_URL"):
+        raise RuntimeError("REDIS_URL is required (REQUIRE_REDIS_RATE_LIMIT=1) for rate limiting.")
 
     if not accounts:
         print("[config] WARNING: no accounts configured for orchestrator.")

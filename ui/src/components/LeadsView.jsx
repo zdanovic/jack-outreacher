@@ -52,7 +52,7 @@ function accountLabel(accMap, accountId) {
   );
 }
 
-export default function LeadsView({ authToken, accounts = [], t = (key) => key }) {
+export default function LeadsView({ authToken, csrfToken, accounts = [], t = (key) => key }) {
   const STATUS_OPTS = [
     { id: "hot", label: t("status_hot"), color: "#f97316" },
     { id: "warm", label: t("status_warm"), color: "#fb7185" },
@@ -77,7 +77,10 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
   const [dragging, setDragging] = useState(null); // username being dragged
   const [contextMenu, setContextMenu] = useState(null); // {x, y, lead}
 
-  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const headers = {
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+  };
   const accMap = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
 
   const toggleStatus = (id) => {
@@ -106,7 +109,7 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
         qs.set("since_days", days);
         qs.set("limit", 200);
         if (search.trim()) qs.set("search", search.trim());
-        const resp = await fetch(`${API_BASE}/leads?${qs.toString()}`, { headers });
+        const resp = await fetch(`${API_BASE}/leads?${qs.toString()}`, { headers, credentials: "include" });
         if (resp.status === 404) {
           // API not yet restarted with /leads route; degrade gracefully.
           if (!cancelled) {
@@ -134,6 +137,7 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
     try {
       const resp = await fetch(`${API_BASE}/leads/${encodeURIComponent(lead.username)}/status`, {
         method: "POST",
+        credentials: "include",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
@@ -157,7 +161,7 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
     try {
       const resp = await fetch(
         `${API_BASE}/accounts/${encodeURIComponent(accountId)}/dialogs/${encodeURIComponent(lead.username)}/messages`,
-        { headers }
+        { headers, credentials: "include" }
       );
       const data = await resp.json();
       setModal((prev) => ({ ...prev, messages: data, loading: false }));
@@ -300,6 +304,7 @@ export default function LeadsView({ authToken, accounts = [], t = (key) => key }
             onClose={() => setModal(null)}
             renderAccount={(id) => accountLabel(accMap, id)}
             authToken={authToken}
+            csrfToken={csrfToken}
             refreshLead={() => openLead(modal.lead)}
           />,
           document.body
@@ -364,33 +369,14 @@ function LeadCardContent({ lead, accMap, t, palette }) {
   );
 }
 
-function LeadModal({ modal, onClose, renderAccount, authToken, refreshLead }) {
+function LeadModal({ modal, onClose, renderAccount, authToken, csrfToken, refreshLead }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
-  const headers = authToken ? { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" } : {};
-  const [uploading, setUploading] = useState(false);
-  const [attachment, setAttachment] = useState(null);
-
-  const uploadFile = async (file) => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const resp = await fetch(`${API_BASE}/attachments/upload`, {
-        method: "POST",
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        body: form,
-      });
-      if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
-      const data = await resp.json();
-      setAttachment(data);
-    } catch (err) {
-      setError(err.message || "Failed to upload file");
-    } finally {
-      setUploading(false);
-    }
+  const headers = {
+    "Content-Type": "application/json",
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
   };
 
   const sendReply = async () => {
@@ -403,7 +389,8 @@ function LeadModal({ modal, onClose, renderAccount, authToken, refreshLead }) {
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ text, attachment_id: attachment?.id || null }),
+          credentials: "include",
+          body: JSON.stringify({ text }),
         }
       );
       if (!resp.ok) {
@@ -463,14 +450,6 @@ function LeadModal({ modal, onClose, renderAccount, authToken, refreshLead }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <div className="upload-row">
-            <input
-              type="file"
-              onChange={(e) => uploadFile(e.target.files?.[0])}
-              disabled={uploading}
-            />
-            {attachment ? <span className="muted">Прикреплено: {attachment.original_name || "file"}</span> : null}
-          </div>
           {error && <div className="error">{error}</div>}
           <div className="modal-actions">
             <button onClick={sendReply} disabled={sending || !text.trim()}>

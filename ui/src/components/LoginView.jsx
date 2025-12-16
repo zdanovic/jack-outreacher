@@ -50,6 +50,7 @@ export default function LoginView({ onSuccess }) {
     try {
       const resp = await fetch(`${API_BASE}/auth/request-code`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
@@ -79,6 +80,7 @@ export default function LoginView({ onSuccess }) {
     try {
       const resp = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),

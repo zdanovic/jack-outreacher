@@ -279,15 +279,7 @@ const translations = {
 };
 
 export default function App() {
-  const [auth, setAuth] = useState(() => {
-    const raw = localStorage.getItem("auth");
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  });
+  const [auth, setAuth] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [loginModalAcc, setLoginModalAcc] = useState(null);
@@ -301,26 +293,42 @@ export default function App() {
   });
   const [accountsRange, setAccountsRange] = useState(() => localStorage.getItem("accountsRange") || "30d");
 
-  const authToken = auth?.token || "";
-
   const envPoll = import.meta.env.VITE_POLL_INTERVAL_MS || "8000";
   const envLogsPoll = import.meta.env.VITE_LOGS_POLL_INTERVAL_MS || envPoll;
   const pollRef = React.useRef({ accounts: null, logs: null });
+  const authToken = ""; // token lives in HttpOnly cookie
+  const csrfToken = auth?.csrf_token;
+  const csrfHeader = csrfToken ? { "X-CSRF-Token": csrfToken } : {};
+
+  useEffect(() => {
+    fetch(`${API_BASE}/auth/me`, { credentials: "include" })
+      .then((resp) => {
+        if (!resp.ok) throw new Error("unauthorized");
+        return resp.json();
+      })
+      .then((data) => {
+        setAuth({ email: data.email, role: data.role, csrf_token: data.csrf_token });
+      })
+      .catch(() => {
+        setAuth(null);
+      });
+  }, []);
 
   const logout = () => {
     setAuth(null);
     setAccounts([]);
     setLogs([]);
     setSelectedAccount(null);
-    localStorage.removeItem("auth");
+    fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {});
   };
 
   const fetchWithAuth = async (url, options = {}) => {
     const resp = await fetch(url, {
       ...options,
+      credentials: "include",
       headers: {
         ...(options.headers || {}),
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        ...csrfHeader,
       },
     });
     if (resp.status === 401 || resp.status === 403) {
@@ -388,8 +396,7 @@ export default function App() {
   };
 
   const handleLoginSuccess = (session) => {
-    setAuth(session);
-    localStorage.setItem("auth", JSON.stringify(session));
+    setAuth({ email: session.email, role: session.role, csrf_token: session.csrf_token });
   };
 
 
@@ -412,9 +419,11 @@ export default function App() {
       const endpoint = willPause ? "pause" : "resume";
       const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(accId)}/${endpoint}`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
         },
       });
       if (!resp.ok) {
@@ -525,22 +534,22 @@ export default function App() {
           {activeTab === "main" && (
             <section className="main-content">
               <div className="main-left">
-                <MetricsDashboard accounts={accounts} authToken={authToken} t={t} />
+                <MetricsDashboard accounts={accounts} authToken={authToken} csrfToken={csrfToken} t={t} />
               </div>
               <div className="main-right">
-                <LogsView logs={logs} authToken={authToken} accounts={accounts} t={t} />
+                <LogsView logs={logs} authToken={authToken} csrfToken={csrfToken} accounts={accounts} t={t} />
               </div>
             </section>
           )}
           {activeTab === "leads" && auth.role === "admin" && (
             <section className="main-content leads-section">
-              <LeadsView authToken={authToken} accounts={accounts} t={t} />
+              <LeadsView authToken={authToken} csrfToken={csrfToken} accounts={accounts} t={t} />
             </section>
           )}
           {activeTab === "admin" && auth.role === "admin" && (
             <section className="main-content">
               <div className="main-left">
-                <SettingsPanel authToken={authToken} accounts={accounts} t={t} />
+                <SettingsPanel authToken={authToken} csrfToken={csrfToken} accounts={accounts} t={t} />
                 <div className="poll-hint muted">Poll: {envPoll} ms · Logs: {envLogsPoll} ms</div>
                 <div className="account-cards">
                   <div className="account-cards-header">
@@ -638,6 +647,7 @@ export default function App() {
             <AccountLoginPanel
               account={loginModalAcc}
               authToken={authToken}
+              csrfToken={csrfToken}
               refreshAccounts={async () => {
                 try {
                   const rangeParam = accountsRange ? `?range=${encodeURIComponent(accountsRange)}` : "";

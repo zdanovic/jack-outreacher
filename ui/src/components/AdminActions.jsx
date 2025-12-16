@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 const API_BASE = "/api";
 
-export default function AdminActions({ authToken }) {
+export default function AdminActions({ authToken, csrfToken }) {
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -12,7 +12,11 @@ export default function AdminActions({ authToken }) {
     try {
       const resp = await fetch(`${API_BASE}/admin/restart`, {
         method: "POST",
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        credentials: "include",
+        headers: {
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        },
       });
       const data = await resp.json();
       setMessage(data.message || "Sent restart request. Restart via process manager.");

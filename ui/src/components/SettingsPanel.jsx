@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 const API_BASE = "/api";
 
-export default function SettingsPanel({ authToken, accounts, t }) {
+export default function SettingsPanel({ authToken, csrfToken, accounts, t }) {
   const tr = (key, fallback) => (typeof t === "function" ? t(key) : null) || fallback || key;
   const SAFE_DEFAULTS = {
     limits: {
@@ -39,12 +39,14 @@ export default function SettingsPanel({ authToken, accounts, t }) {
   const [restartLoading, setRestartLoading] = useState(false);
   const [restartMessage, setRestartMessage] = useState(null);
 
-  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const headers = {
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+  };
 
   useEffect(() => {
-    if (!authToken) return;
     setLoading(true);
-    fetch(`${API_BASE}/settings`, { headers })
+    fetch(`${API_BASE}/settings`, { headers, credentials: "include" })
       .then((res) => res.json())
       .then((data) => setSettings(data))
       .catch((err) => setError(err.message))
@@ -68,6 +70,7 @@ export default function SettingsPanel({ authToken, accounts, t }) {
     try {
       const resp = await fetch(`${API_BASE}/settings`, {
         method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
           limits: settings.limits,
@@ -96,6 +99,7 @@ export default function SettingsPanel({ authToken, accounts, t }) {
     try {
       const resp = await fetch(`${API_BASE}/admin/restart`, {
         method: "POST",
+        credentials: "include",
         headers,
       });
       const data = await resp.json();
