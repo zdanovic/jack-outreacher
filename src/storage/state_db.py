@@ -136,6 +136,7 @@ class StateDB:
             """
             CREATE TABLE IF NOT EXISTS attachments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                public_id TEXT UNIQUE,
                 original_name TEXT,
                 stored_path TEXT,
                 mime_type TEXT,
@@ -145,6 +146,7 @@ class StateDB:
             """
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_attachments_created_at ON attachments(created_at);")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_public_id ON attachments(public_id);")
 
         # Runtime account state for cross-process visibility (API/UI vs worker).
         cur.execute(
@@ -191,8 +193,28 @@ class StateDB:
             cur.execute("ALTER TABLE leads ADD COLUMN bio TEXT;")
         except Exception:
             pass
+        try:
+            cur.execute("ALTER TABLE attachments ADD COLUMN public_id TEXT;")
+        except Exception:
+            pass
 
         self.conn.commit()
+
+        # Backfill missing attachment public IDs for existing rows.
+        try:
+            import uuid
+
+            cur.execute("SELECT id FROM attachments WHERE public_id IS NULL OR public_id = ''")
+            rows = cur.fetchall()
+            for (att_id,) in rows:
+                cur.execute(
+                    "UPDATE attachments SET public_id = ? WHERE id = ?;",
+                    (uuid.uuid4().hex, att_id),
+                )
+            if rows:
+                self.conn.commit()
+        except Exception:
+            pass
 
     # -------- Runtime state helpers (statuses/errors/floodwait) --------
     def upsert_account_runtime(

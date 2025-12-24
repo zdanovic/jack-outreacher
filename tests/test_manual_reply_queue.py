@@ -10,6 +10,7 @@ if ROOT_DIR not in sys.path:
 
 from src.storage.state_db import get_state_db
 from src.core.state import AccountStatus
+from src.core.config import load_app_config
 
 
 class ManualReplyQueueTest(unittest.TestCase):
@@ -35,6 +36,8 @@ class ManualReplyQueueTest(unittest.TestCase):
         app.dependency_overrides[current_user] = lambda: AuthUser(email="admin@test.com", role="admin")
         app.dependency_overrides[admin_required] = lambda: AuthUser(email="admin@test.com", role="admin")
         self.client = TestClient(app)
+        cfg = load_app_config()
+        self.account_id = cfg.accounts[0].id if cfg.accounts else "1"
 
         # Ensure lead exists
         db = get_state_db()
@@ -55,7 +58,7 @@ class ManualReplyQueueTest(unittest.TestCase):
         self.api_module.global_state.get_status = AsyncMock(return_value=AccountStatus.NEED_RELOGIN)  # type: ignore
 
         resp = self.client.post(
-            "/accounts/demo/dialogs/queued_user/reply",
+            f"/accounts/{self.account_id}/dialogs/queued_user/reply",
             json={"text": "hi there"},
         )
         self.assertEqual(resp.status_code, 200)
@@ -67,7 +70,7 @@ class ManualReplyQueueTest(unittest.TestCase):
         # Ensure entry in pending_outbox
         db = get_state_db()
         cur = db.conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM pending_outbox WHERE account_id=? AND username=?", ("demo", "queued_user"))
+        cur.execute("SELECT COUNT(*) FROM pending_outbox WHERE account_id=? AND username=?", (self.account_id, "queued_user"))
         count = cur.fetchone()[0]
         self.assertGreater(count, 0)
 

@@ -20,6 +20,9 @@ from datetime import date, timedelta
 from typing import List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Depends, Header, status, UploadFile, File, Response as FastAPIResponse, Cookie
+from fastapi.responses import FileResponse
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from fastapi.openapi.utils import get_openapi
 from fastapi import Request
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -30,6 +33,7 @@ from ..core.state import global_state, AccountStatus
 from ..storage.state_db import get_state_db
 from ..storage.messages_store import messages_store
 from ..storage.logs_store import logs_store
+from ..storage.attachments_store import attachments_store
 from .auth import AuthService, AuthUser
 from ..storage.settings_store import settings_store
 from ..storage.outbox_store import outbox_store
@@ -42,7 +46,7 @@ except Exception:  # pragma: no cover
     redis = None
 
 
-app = FastAPI(title="TG Orchestrator UI API")
+app = FastAPI(title="TG Orchestrator UI API", docs_url=None, redoc_url=None, openapi_url=None)
 
 _config = load_app_config()
 _db = get_state_db()
@@ -53,6 +57,8 @@ _leads_store = LeadsStore()
 _dialogs_store = DialogsStore()
 _require_https = os.getenv("REQUIRE_HTTPS", "1").strip().lower() not in ("0", "false", "no", "off")
 _REDIS_URL = os.getenv("REDIS_URL")
+_ATTACHMENTS_ENABLED = os.getenv("ATTACHMENTS_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off")
+_ACCOUNT_IDS = {acc.id for acc in _config.accounts}
 _redis_client = None
 _COOKIE_NAME = os.getenv("AUTH_COOKIE_NAME", "auth_token")
 _COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "1").strip().lower() not in ("0", "false", "no", "off")
@@ -303,6 +309,13 @@ async def current_user(
         token = request.cookies.get(_COOKIE_NAME)
     user = _auth.verify_token(token) if token else None
     if not user:
+        await logs_store.log_event(
+            account_id="security",
+            action_type="AUTHN_FAIL",
+            target=request.url.path,
+            result="unauthorized",
+            info=f"ip={_client_ip(request)}",
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token.")
     return user
 
@@ -324,9 +337,16 @@ def _require_csrf(request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF validation failed.")
 
 
-def admin_required(request: Request, user: AuthUser = Depends(current_user)) -> AuthUser:  # type: ignore[no-redef]
+async def admin_required(request: Request, user: AuthUser = Depends(current_user)) -> AuthUser:  # type: ignore[no-redef]
     _require_csrf(request)
     if user.role != "admin":
+        await logs_store.log_event(
+            account_id="security",
+            action_type="AUTHZ_DENY",
+            target=request.url.path,
+            result="forbidden",
+            info=f"ip={_client_ip(request)} role={user.role}",
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only.")
     return user
 
@@ -334,6 +354,44 @@ def admin_required(request: Request, user: AuthUser = Depends(current_user)) -> 
 def client_or_admin(request: Request, user: AuthUser = Depends(current_user)) -> AuthUser:  # type: ignore[no-redef]
     _require_csrf(request)
     return user
+
+
+async def _require_account_id(account_id: str, request: Request) -> None:
+    if account_id not in _ACCOUNT_IDS:
+        await logs_store.log_event(
+            account_id="security",
+            action_type="AUTHZ_DENY",
+            target=account_id,
+            result="invalid_account",
+            info=f"path={request.url.path} ip={_client_ip(request)}",
+        )
+        raise HTTPException(status_code=404, detail="Account not found")
+
+
+def _openapi_schema() -> Dict[str, Any]:
+    if app.openapi_schema:
+        return app.openapi_schema  # type: ignore[return-value]
+    app.openapi_schema = get_openapi(
+        title=app.title,
+        version="1.0.0",
+        routes=app.routes,
+    )
+    return app.openapi_schema  # type: ignore[return-value]
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_json(_: AuthUser = Depends(admin_required)) -> Dict[str, Any]:
+    return _openapi_schema()
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_docs(_: AuthUser = Depends(admin_required)):
+    return get_swagger_ui_html(openapi_url="/api/openapi.json", title="API Docs")
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_docs(_: AuthUser = Depends(admin_required)):
+    return get_redoc_html(openapi_url="/api/openapi.json", title="API Docs")
 
 
 @app.get("/accounts")
@@ -368,7 +426,8 @@ async def list_accounts(_: AuthUser = Depends(admin_required)) -> List[Dict[str,
 
 
 @app.get("/accounts/{account_id}/metrics")
-async def account_metrics(account_id: str, _: AuthUser = Depends(admin_required)) -> Dict[str, Any]:
+async def account_metrics(account_id: str, request: Request, _: AuthUser = Depends(admin_required)) -> Dict[str, Any]:
+    await _require_account_id(account_id, request)
     metrics = _get_today_metrics()
     if account_id not in metrics:
         raise HTTPException(status_code=404, detail="Metrics not found for account")
@@ -377,8 +436,9 @@ async def account_metrics(account_id: str, _: AuthUser = Depends(admin_required)
 
 @app.get("/accounts/{account_id}/dialogs")
 async def account_dialogs(
-    account_id: str, limit: int = 100, _: AuthUser = Depends(admin_required)
+    account_id: str, request: Request, limit: int = 100, _: AuthUser = Depends(admin_required)
 ) -> List[Dict[str, Any]]:
+    await _require_account_id(account_id, request)
     limit = max(1, min(limit, 200))
     return _dialogs_store.list_for_account(account_id=account_id, limit=limit)
 
@@ -579,9 +639,11 @@ async def update_lead_status(
 async def dialog_messages(
     account_id: str,
     username: str,
+    request: Request,
     limit: int = 50,
     _: AuthUser = Depends(admin_required),
 ) -> List[Dict[str, Any]]:
+    await _require_account_id(account_id, request)
     return messages_store.get_messages(account_id=account_id, username=username, limit=limit)
 
 
@@ -614,10 +676,11 @@ async def list_events(limit: int = 200, _: AuthUser = Depends(admin_required)) -
 
 
 @app.post("/accounts/{account_id}/pause")
-async def pause_account(account_id: str, _: AuthUser = Depends(admin_required)) -> Dict[str, str]:
+async def pause_account(account_id: str, request: Request, _: AuthUser = Depends(admin_required)) -> Dict[str, str]:
     """
     Mark an account as PAUSED at the state level and persist disable override.
     """
+    await _require_account_id(account_id, request)
     settings = settings_store.get_settings()
     overrides = settings.get("accounts", {}).get("overrides", {})
     overrides[account_id] = {**overrides.get(account_id, {}), "enabled": False}
@@ -627,10 +690,11 @@ async def pause_account(account_id: str, _: AuthUser = Depends(admin_required)) 
 
 
 @app.post("/accounts/{account_id}/resume")
-async def resume_account(account_id: str, _: AuthUser = Depends(admin_required)) -> Dict[str, str]:
+async def resume_account(account_id: str, request: Request, _: AuthUser = Depends(admin_required)) -> Dict[str, str]:
     """
     Mark an account as ACTIVE at the state level and persist enable override.
     """
+    await _require_account_id(account_id, request)
     settings = settings_store.get_settings()
     overrides = settings.get("accounts", {}).get("overrides", {})
     overrides[account_id] = {**overrides.get(account_id, {}), "enabled": True}
@@ -696,7 +760,7 @@ class SettingsUpdate(BaseModel):
 
 class ManualReplyBody(BaseModel):
     text: str
-    attachment_id: int | None = None
+    attachment_id: str | None = None
 
 
 @app.post("/auth/login", response_model=AuthLoginResponse)
@@ -836,17 +900,36 @@ async def manual_reply(
     account_id: str,
     username: str,
     body: ManualReplyBody,
+    request: Request,
     _: AuthUser = Depends(admin_required),
 ) -> Dict[str, Any]:
     """
     Record a manual reply for a dialog. This stores the message and logs the event.
     Actual Telegram send would be handled by a worker if wired; currently stored for audit/UI.
     """
+    await _require_account_id(account_id, request)
     status = await global_state.get_status(account_id)
     if not body.text and body.attachment_id is None:
         raise HTTPException(status_code=400, detail="Empty message")
     if body.attachment_id is not None:
-        raise HTTPException(status_code=400, detail="Attachments are disabled.")
+        if not _ATTACHMENTS_ENABLED:
+            raise HTTPException(status_code=400, detail="Attachments are disabled.")
+        attachment = attachments_store.get(str(body.attachment_id))
+        if not attachment:
+            await logs_store.log_event(
+                account_id="security",
+                action_type="AUTHZ_DENY",
+                target=str(body.attachment_id),
+                result="attachment_not_found",
+                info=f"path={request.url.path} ip={_client_ip(request)}",
+            )
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        body.text = (body.text or "").strip()
+        filename = attachment["original_name"] or "file"
+        if body.text:
+            body.text += f" [file: {filename}]"
+        else:
+            body.text = f"[file: {filename}]"
 
     _dialogs_store.mark_manual_reply(username, account_id)
 
@@ -882,17 +965,33 @@ async def manual_reply(
 
 
 @app.post("/attachments/upload")
-async def upload_attachment(file: UploadFile = File(...), _: AuthUser = Depends(admin_required)) -> Dict[str, Any]:
+async def upload_attachment(file: UploadFile = File(...), request: Request = None, _: AuthUser = Depends(admin_required)) -> Dict[str, Any]:
     """
     Upload a document to the local attachments store. The file is saved on disk;
     DB keeps only metadata. Returned ID can be attached to manual replies.
     """
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attachment uploads are disabled.")
+    if not _ATTACHMENTS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attachment uploads are disabled.")
+    saved = attachments_store.safe_store_upload(file)
+    return saved
 
 
 @app.get("/attachments/{attachment_id}")
-async def get_attachment(attachment_id: int, _: AuthUser = Depends(admin_required)):
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attachment download is disabled.")
+async def get_attachment(attachment_id: str, request: Request, _: AuthUser = Depends(admin_required)):
+    if not _ATTACHMENTS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attachment download is disabled.")
+    att = attachments_store.get(str(attachment_id))
+    if not att or not os.path.exists(att["stored_path"]):
+        await logs_store.log_event(
+            account_id="security",
+            action_type="AUTHZ_DENY",
+            target=str(attachment_id),
+            result="attachment_not_found",
+            info=f"path={request.url.path} ip={_client_ip(request)}",
+        )
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    filename = att["original_name"] or f"attachment_{att['id']}"
+    return FileResponse(att["stored_path"], media_type=att["mime_type"] or "application/octet-stream", filename=filename)
 
 
 @app.get("/landing/summary")
@@ -954,7 +1053,7 @@ async def client_accounts(_: AuthUser = Depends(client_or_admin)) -> List[Dict[s
 
 
 @app.post("/accounts/{account_id}/login/start", response_model=LoginStartResponse)
-async def login_start(account_id: str, _: AuthUser = Depends(admin_required)) -> LoginStartResponse:
+async def login_start(account_id: str, request: Request, _: AuthUser = Depends(admin_required)) -> LoginStartResponse:
     """
     Start login flow for a given account by sending a login code to the
     configured phone number. Requires Telethon to be installed and will
@@ -963,6 +1062,7 @@ async def login_start(account_id: str, _: AuthUser = Depends(admin_required)) ->
     if TelegramClient is None:
         raise HTTPException(status_code=500, detail="Telethon is not available in this environment.")
 
+    await _require_account_id(account_id, request)
     acc = next((a for a in _config.accounts if a.id == account_id), None)
     if acc is None:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -986,6 +1086,7 @@ async def login_start(account_id: str, _: AuthUser = Depends(admin_required)) ->
 async def login_verify(
     account_id: str,
     body: LoginVerifyBody,
+    request: Request,
     _: AuthUser = Depends(admin_required),
 ) -> Dict[str, str]:
     """
@@ -994,6 +1095,7 @@ async def login_verify(
     if TelegramClient is None:
         raise HTTPException(status_code=500, detail="Telethon is not available in this environment.")
 
+    await _require_account_id(account_id, request)
     acc = next((a for a in _config.accounts if a.id == account_id), None)
     if acc is None:
         raise HTTPException(status_code=404, detail="Account not found")

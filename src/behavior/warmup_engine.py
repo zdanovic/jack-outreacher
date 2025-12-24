@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import random
 import time
+import logging
 from datetime import datetime
 from typing import Iterable, List, Dict, Any
 from zoneinfo import ZoneInfo
@@ -109,12 +110,16 @@ class WarmupEngine:
             if not os.path.exists(path):
                 return []
             items: List[str] = []
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    s = line.strip()
-                    if not s or s.startswith("#"):
-                        continue
-                    items.append(s)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        s = line.strip()
+                        if not s or s.startswith("#"):
+                            continue
+                        items.append(s)
+            except OSError as e:
+                logging.warning("WarmupEngine: failed to read %s (%s); skipping extra sources.", path, e)
+                return []
             return items
 
         extra_channels = _load_list(os.path.join(DATA_DIR, "warmup_channels.txt"))
