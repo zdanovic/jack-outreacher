@@ -146,7 +146,6 @@ class StateDB:
             """
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_attachments_created_at ON attachments(created_at);")
-        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_public_id ON attachments(public_id);")
 
         # Runtime account state for cross-process visibility (API/UI vs worker).
         cur.execute(
@@ -197,6 +196,8 @@ class StateDB:
             cur.execute("ALTER TABLE attachments ADD COLUMN public_id TEXT;")
         except Exception:
             pass
+
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_public_id ON attachments(public_id);")
 
         self.conn.commit()
 
