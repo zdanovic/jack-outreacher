@@ -1,4 +1,5 @@
 import React from "react";
+import { accountDisplayId, accountKey } from "../utils/accounts.js";
 
 export default function ClientLanding({ summary, accounts, onLogout, email }) {
   const agg = summary?.metrics || {};
@@ -46,8 +47,8 @@ export default function ClientLanding({ summary, accounts, onLogout, email }) {
         <h3>Accounts status</h3>
         <div className="client-accounts-grid">
           {accounts.map((acc) => (
-            <div key={acc.id} className="client-account-card">
-              <div className="title">{acc.id}</div>
+            <div key={accountKey(acc)} className="client-account-card">
+              <div className="title">{accountDisplayId(acc)}</div>
               <div className="status">{acc.status}</div>
               <div className="metrics">
                 <span>cold {acc.metrics?.cold_sent || 0}</span>

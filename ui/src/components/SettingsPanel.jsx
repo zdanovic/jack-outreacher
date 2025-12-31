@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { accountDisplayId, accountKey, accountPhoneTail } from "../utils/accounts.js";
 
 const API_BASE = "/api";
 
@@ -117,13 +118,13 @@ export default function SettingsPanel({ authToken, csrfToken, accounts, t }) {
   if (!settings) return null;
 
   const accountLabel = (accId) => {
-    const acc = accounts.find((a) => a.id === accId);
-    if (!acc || !acc.phone) return accId;
-    const digits = acc.phone.replace(/\D/g, "");
-    const tail = digits.slice(-4);
+    const acc = accounts.find((a) => accountKey(a) === accId);
+    if (!acc) return accId;
+    const label = accountDisplayId(acc);
+    const tail = accountPhoneTail(acc);
     return (
       <>
-        {accId} <span className="account-phone-hint">(...{tail || "????"})</span>
+        {label} <span className="account-phone-hint">(...{tail || "????"})</span>
       </>
     );
   };

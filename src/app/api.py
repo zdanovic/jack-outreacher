@@ -12,6 +12,8 @@ shared SQLite state and log files.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import secrets
 import subprocess
@@ -59,6 +61,19 @@ _require_https = os.getenv("REQUIRE_HTTPS", "1").strip().lower() not in ("0", "f
 _REDIS_URL = os.getenv("REDIS_URL")
 _ATTACHMENTS_ENABLED = os.getenv("ATTACHMENTS_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off")
 _ACCOUNT_IDS = {acc.id for acc in _config.accounts}
+_ACCOUNT_PUBLIC_ID_SALT = os.getenv("ACCOUNT_PUBLIC_ID_SALT") or _config.auth.secret
+if not _ACCOUNT_PUBLIC_ID_SALT:
+    _ACCOUNT_PUBLIC_ID_SALT = "dev-salt"
+    print("[security] WARNING: ACCOUNT_PUBLIC_ID_SALT is not set; account IDs are predictable.")
+_ACCOUNT_PUBLIC_IDS = {}
+for acc in _config.accounts:
+    digest = hmac.new(
+        _ACCOUNT_PUBLIC_ID_SALT.encode("utf-8"),
+        acc.id.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    _ACCOUNT_PUBLIC_IDS[acc.id] = f"acc_{digest[:12]}"
+_PUBLIC_TO_INTERNAL = {public_id: internal_id for internal_id, public_id in _ACCOUNT_PUBLIC_IDS.items()}
 _redis_client = None
 _COOKIE_NAME = os.getenv("AUTH_COOKIE_NAME", "auth_token")
 _COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "1").strip().lower() not in ("0", "false", "no", "off")
@@ -136,6 +151,16 @@ def _rate_limit(request: Request, key_suffix: str = "") -> None:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests.")
     bucket.append(now)
     _RATE_LIMIT[key] = bucket
+
+
+def _resolve_account_id(account_id: str) -> str:
+    if account_id in _ACCOUNT_IDS:
+        return account_id
+    return _PUBLIC_TO_INTERNAL.get(account_id, "")
+
+
+def _public_account_id(account_id: str) -> str:
+    return _ACCOUNT_PUBLIC_IDS.get(account_id, account_id)
 
 
 def _set_auth_cookie(resp: FastAPIResponse, token: str) -> None:
@@ -356,8 +381,9 @@ def client_or_admin(request: Request, user: AuthUser = Depends(current_user)) ->
     return user
 
 
-async def _require_account_id(account_id: str, request: Request) -> None:
-    if account_id not in _ACCOUNT_IDS:
+async def _require_account_id(account_id: str, request: Request) -> str:
+    internal_id = _resolve_account_id(account_id)
+    if not internal_id:
         await logs_store.log_event(
             account_id="security",
             action_type="AUTHZ_DENY",
@@ -366,6 +392,7 @@ async def _require_account_id(account_id: str, request: Request) -> None:
             info=f"path={request.url.path} ip={_client_ip(request)}",
         )
         raise HTTPException(status_code=404, detail="Account not found")
+    return internal_id
 
 
 def _openapi_schema() -> Dict[str, Any]:
@@ -409,9 +436,12 @@ async def list_accounts(_: AuthUser = Depends(admin_required)) -> List[Dict[str,
         flood_sec = None
         if runtime.flood_wait_until:
             flood_sec = max(0, int(runtime.flood_wait_until - now))
+        public_id = _public_account_id(acc.id)
         result.append(
             {
                 "id": acc.id,
+                "public_id": public_id,
+                "display_id": public_id,
                 "phone": acc.phone,
                 "status": status.name,
                 "login_required": status == AccountStatus.NEED_RELOGIN,
@@ -427,20 +457,20 @@ async def list_accounts(_: AuthUser = Depends(admin_required)) -> List[Dict[str,
 
 @app.get("/accounts/{account_id}/metrics")
 async def account_metrics(account_id: str, request: Request, _: AuthUser = Depends(admin_required)) -> Dict[str, Any]:
-    await _require_account_id(account_id, request)
+    internal_id = await _require_account_id(account_id, request)
     metrics = _get_today_metrics()
-    if account_id not in metrics:
+    if internal_id not in metrics:
         raise HTTPException(status_code=404, detail="Metrics not found for account")
-    return metrics[account_id]
+    return metrics[internal_id]
 
 
 @app.get("/accounts/{account_id}/dialogs")
 async def account_dialogs(
     account_id: str, request: Request, limit: int = 100, _: AuthUser = Depends(admin_required)
 ) -> List[Dict[str, Any]]:
-    await _require_account_id(account_id, request)
+    internal_id = await _require_account_id(account_id, request)
     limit = max(1, min(limit, 200))
-    return _dialogs_store.list_for_account(account_id=account_id, limit=limit)
+    return _dialogs_store.list_for_account(account_id=internal_id, limit=limit)
 
 
 @app.get("/metrics/timeseries")
@@ -520,7 +550,11 @@ async def metrics_timeseries(days: int = 30, _: AuthUser = Depends(admin_require
             acc_day = per_account.get(acc.id, {}).get(day, _zero_metrics())
             per_account_series[acc.id].append({"date": day, **acc_day})
 
-    return {"by_date": by_date, "per_account": per_account_series}
+    per_account_public = {
+        _public_account_id(acc.id): per_account_series.get(acc.id, [])
+        for acc in _config.accounts
+    }
+    return {"by_date": by_date, "per_account": per_account_series, "per_account_public": per_account_public}
 
 
 @app.get("/leads")
@@ -580,6 +614,7 @@ async def list_leads(
         last_contacted_at,
         fail_reason,
     ) in rows:
+        public_last_account_id = _public_account_id(last_account_id) if last_account_id else None
         leads.append(
             {
                 "username": username,
@@ -591,6 +626,8 @@ async def list_leads(
                 "source": source or "",
                 "status": status or "new",
                 "last_account_id": last_account_id,
+                "last_account_public_id": public_last_account_id,
+                "last_account_display_id": public_last_account_id or last_account_id,
                 "last_contacted_at": last_contacted_at,
                 "fail_reason": fail_reason or "",
             }
@@ -624,6 +661,7 @@ async def update_lead_status(
     if not row:
         raise HTTPException(status_code=404, detail="Lead not found")
     uname, name, tag, source, status, last_account_id, last_contacted_at = row
+    public_last_account_id = _public_account_id(last_account_id) if last_account_id else None
     return {
         "username": uname,
         "name": name or "",
@@ -631,6 +669,8 @@ async def update_lead_status(
         "source": source or "",
         "status": status or new_status,
         "last_account_id": last_account_id,
+        "last_account_public_id": public_last_account_id,
+        "last_account_display_id": public_last_account_id or last_account_id,
         "last_contacted_at": last_contacted_at,
     }
 
@@ -643,8 +683,8 @@ async def dialog_messages(
     limit: int = 50,
     _: AuthUser = Depends(admin_required),
 ) -> List[Dict[str, Any]]:
-    await _require_account_id(account_id, request)
-    return messages_store.get_messages(account_id=account_id, username=username, limit=limit)
+    internal_id = await _require_account_id(account_id, request)
+    return messages_store.get_messages(account_id=internal_id, username=username, limit=limit)
 
 
 @app.get("/logs/events")
@@ -671,7 +711,13 @@ async def list_events(limit: int = 200, _: AuthUser = Depends(admin_required)) -
         parts = line.rstrip("\n").split("\t")
         if len(parts) != len(header):
             continue
-        events.append(dict(zip(header, parts)))
+        event = dict(zip(header, parts))
+        acc_id = event.get("account_id")
+        if acc_id in _ACCOUNT_PUBLIC_IDS:
+            public_id = _public_account_id(acc_id)
+            event["account_public_id"] = public_id
+            event["account_display_id"] = public_id
+        events.append(event)
     return events
 
 
@@ -680,13 +726,14 @@ async def pause_account(account_id: str, request: Request, _: AuthUser = Depends
     """
     Mark an account as PAUSED at the state level and persist disable override.
     """
-    await _require_account_id(account_id, request)
+    internal_id = await _require_account_id(account_id, request)
     settings = settings_store.get_settings()
     overrides = settings.get("accounts", {}).get("overrides", {})
-    overrides[account_id] = {**overrides.get(account_id, {}), "enabled": False}
+    overrides[internal_id] = {**overrides.get(internal_id, {}), "enabled": False}
     settings_store.update_settings({"accounts": {"overrides": overrides}})
-    await global_state.set_status(account_id, AccountStatus.PAUSED)
-    return {"id": account_id, "status": AccountStatus.PAUSED.name}
+    await global_state.set_status(internal_id, AccountStatus.PAUSED)
+    public_id = _public_account_id(internal_id)
+    return {"id": internal_id, "public_id": public_id, "status": AccountStatus.PAUSED.name}
 
 
 @app.post("/accounts/{account_id}/resume")
@@ -694,13 +741,14 @@ async def resume_account(account_id: str, request: Request, _: AuthUser = Depend
     """
     Mark an account as ACTIVE at the state level and persist enable override.
     """
-    await _require_account_id(account_id, request)
+    internal_id = await _require_account_id(account_id, request)
     settings = settings_store.get_settings()
     overrides = settings.get("accounts", {}).get("overrides", {})
-    overrides[account_id] = {**overrides.get(account_id, {}), "enabled": True}
+    overrides[internal_id] = {**overrides.get(internal_id, {}), "enabled": True}
     settings_store.update_settings({"accounts": {"overrides": overrides}})
-    await global_state.set_status(account_id, AccountStatus.ACTIVE)
-    return {"id": account_id, "status": AccountStatus.ACTIVE.name}
+    await global_state.set_status(internal_id, AccountStatus.ACTIVE)
+    public_id = _public_account_id(internal_id)
+    return {"id": internal_id, "public_id": public_id, "status": AccountStatus.ACTIVE.name}
 
 
 class LoginStartResponse(BaseModel):
@@ -907,8 +955,8 @@ async def manual_reply(
     Record a manual reply for a dialog. This stores the message and logs the event.
     Actual Telegram send would be handled by a worker if wired; currently stored for audit/UI.
     """
-    await _require_account_id(account_id, request)
-    status = await global_state.get_status(account_id)
+    internal_id = await _require_account_id(account_id, request)
+    status = await global_state.get_status(internal_id)
     if not body.text and body.attachment_id is None:
         raise HTTPException(status_code=400, detail="Empty message")
     if body.attachment_id is not None:
@@ -931,23 +979,24 @@ async def manual_reply(
         else:
             body.text = f"[file: {filename}]"
 
-    _dialogs_store.mark_manual_reply(username, account_id)
+    _dialogs_store.mark_manual_reply(username, internal_id)
 
     if status == AccountStatus.ACTIVE:
-        messages_store.add_message(account_id=account_id, username=username, direction="out", text=body.text)
+        messages_store.add_message(account_id=internal_id, username=username, direction="out", text=body.text)
         await logs_store.log_event(
-            account_id=account_id,
+            account_id=internal_id,
             action_type="MANUAL_REPLY",
             target=username,
             result="ok",
             info=body.text[:200],
         )
-        return {"status": "sent", "account_id": account_id, "username": username}
+        public_id = _public_account_id(internal_id)
+        return {"status": "sent", "account_id": internal_id, "account_public_id": public_id, "username": username}
 
     # Queue for later if account is not active (logout/ban/etc.).
     reason = f"Account status {status.name}"
     outbox_store.add_pending(
-        account_id=account_id,
+        account_id=internal_id,
         username=username,
         direction="out",
         text=body.text,
@@ -955,13 +1004,20 @@ async def manual_reply(
     )
     _leads_store.update_status(username, "failed", fail_reason=reason)
     await logs_store.log_event(
-        account_id=account_id,
+        account_id=internal_id,
         action_type="MANUAL_REPLY",
         target=username,
         result="queued",
         info=f"{reason}: {body.text[:120]}",
     )
-    return {"status": "queued", "account_id": account_id, "username": username, "reason": reason}
+    public_id = _public_account_id(internal_id)
+    return {
+        "status": "queued",
+        "account_id": internal_id,
+        "account_public_id": public_id,
+        "username": username,
+        "reason": reason,
+    }
 
 
 @app.post("/attachments/upload")
@@ -1042,9 +1098,12 @@ async def client_accounts(_: AuthUser = Depends(client_or_admin)) -> List[Dict[s
     for acc in _config.accounts:
         status = await global_state.get_status(acc.id)
         m = metrics.get(acc.id, {})
+        public_id = _public_account_id(acc.id)
         result.append(
             {
                 "id": acc.id,
+                "public_id": public_id,
+                "display_id": public_id,
                 "status": status.name,
                 "metrics": m,
             }
@@ -1062,8 +1121,8 @@ async def login_start(account_id: str, request: Request, _: AuthUser = Depends(a
     if TelegramClient is None:
         raise HTTPException(status_code=500, detail="Telethon is not available in this environment.")
 
-    await _require_account_id(account_id, request)
-    acc = next((a for a in _config.accounts if a.id == account_id), None)
+    internal_id = await _require_account_id(account_id, request)
+    acc = next((a for a in _config.accounts if a.id == internal_id), None)
     if acc is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
@@ -1078,7 +1137,7 @@ async def login_start(account_id: str, request: Request, _: AuthUser = Depends(a
     client = TelegramClient(acc.session_name, acc.api_id, acc.api_hash)  # type: ignore[call-arg]
     await client.connect()
     await client.send_code_request(acc.phone)
-    _login_clients[account_id] = client
+    _login_clients[internal_id] = client
     return LoginStartResponse(status="code_sent")
 
 
@@ -1095,12 +1154,12 @@ async def login_verify(
     if TelegramClient is None:
         raise HTTPException(status_code=500, detail="Telethon is not available in this environment.")
 
-    await _require_account_id(account_id, request)
-    acc = next((a for a in _config.accounts if a.id == account_id), None)
+    internal_id = await _require_account_id(account_id, request)
+    acc = next((a for a in _config.accounts if a.id == internal_id), None)
     if acc is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    client = _login_clients.get(account_id)
+    client = _login_clients.get(internal_id)
     if client is None:
         raise HTTPException(status_code=400, detail="Login has not been started for this account.")
 
@@ -1112,19 +1171,19 @@ async def login_verify(
         await client.sign_in(password=body.password)
 
     await client.disconnect()
-    _login_clients.pop(account_id, None)
+    _login_clients.pop(internal_id, None)
 
     # Clear stale errors and flip status so the orchestrator can auto-resume the worker.
-    await global_state.set_last_error(account_id, None)
-    await global_state.set_ban_reason(account_id, None)
-    await global_state.set_floodwait(account_id, None)
+    await global_state.set_last_error(internal_id, None)
+    await global_state.set_ban_reason(internal_id, None)
+    await global_state.set_floodwait(internal_id, None)
     settings = settings_store.get_settings() or {}
     overrides = settings.get("accounts", {}).get("overrides", {}) if isinstance(settings, dict) else {}
-    enabled = overrides.get(account_id, {}).get("enabled", True)
+    enabled = overrides.get(internal_id, {}).get("enabled", True)
     new_status = AccountStatus.ACTIVE if enabled else AccountStatus.PAUSED
-    await global_state.set_status(account_id, new_status)
+    await global_state.set_status(internal_id, new_status)
     await logs_store.log_event(
-        account_id=account_id,
+        account_id=internal_id,
         action_type="LOGIN_STATE",
         target=acc.phone,
         result="ok",

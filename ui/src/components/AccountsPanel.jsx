@@ -1,12 +1,13 @@
 import React from "react";
+import { accountDisplayId, accountKey, accountPhoneTail } from "../utils/accounts.js";
 
 function displayName(acc) {
-  if (!acc.phone) return acc.id;
-  const digits = acc.phone.replace(/\D/g, "");
-  const tail = digits.slice(-4);
+  const label = accountDisplayId(acc);
+  const tail = accountPhoneTail(acc);
+  if (!tail) return label;
   return (
     <>
-      {acc.id}{" "}
+      {label}{" "}
       <span className="account-phone-hint">
         (...{tail || "????"})
       </span>
@@ -41,10 +42,10 @@ export default function AccountsPanel({ accounts, selected, onSelect, authToken,
       <ul>
         {accounts.map((acc) => (
           <li
-            key={acc.id}
+            key={accountKey(acc)}
             className={
               "account-item" +
-              (selected && selected.id === acc.id ? " account-item-selected" : "")
+              (selected && accountKey(selected) === accountKey(acc) ? " account-item-selected" : "")
             }
             onClick={() => onSelect(acc)}
           >

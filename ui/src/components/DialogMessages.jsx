@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { accountKey } from "../utils/accounts.js";
 
 const API_BASE = "/api";
 
@@ -13,7 +14,7 @@ export default function DialogMessages({ account, selectedDialog, onSelectDialog
     }
     fetch(
       `${API_BASE}/accounts/${encodeURIComponent(
-        account.id
+        accountKey(account)
       )}/dialogs/${encodeURIComponent(selectedDialog)}/messages`
       , {
         headers: {

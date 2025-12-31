@@ -8,12 +8,13 @@ import SettingsPanel from "./components/SettingsPanel.jsx";
 import AccountLoginPanel from "./components/AccountLoginPanel.jsx";
 import LeadsView from "./components/LeadsView.jsx";
 import VideoBackground from "./components/VideoBackground.jsx";
+import { accountDisplayId, accountKey, accountPhoneTail } from "./utils/accounts.js";
 
 function accountDisplay(acc) {
   if (!acc) return "";
-  const digits = (acc.phone || "").replace(/\D/g, "");
-  const tail = digits ? digits.slice(-4) : "";
-  return tail ? `${acc.id} (...${tail})` : acc.id;
+  const label = accountDisplayId(acc);
+  const tail = accountPhoneTail(acc);
+  return tail ? `${label} (...${tail})` : label;
 }
 
 function accountStatusMeta(acc, t) {
@@ -401,15 +402,15 @@ export default function App() {
 
 
   const toggleAccount = async (acc) => {
-    if (!acc || acc.id == null) return;
-    const accId = String(acc.id);
+    const accId = accountKey(acc);
+    if (!accId) return;
     const status = (acc.status || "").toUpperCase();
     const willPause = status !== "PAUSED";
 
     // optimistic: flip status locally
     setAccounts((prev) =>
       prev.map((a) =>
-        a.id === acc.id
+        accountKey(a) === accId
           ? { ...a, status: willPause ? "PAUSED" : "ACTIVE" }
           : a
       )
@@ -509,7 +510,7 @@ export default function App() {
             <div className="header-title">
               {activeTab === "main"
                 ? selectedAccount
-                  ? `${t("accountPrefix")}: ${selectedAccount.id}`
+                  ? `${t("accountPrefix")}: ${accountDisplayId(selectedAccount)}`
                   : t("dashboard")
                 : activeTab === "leads"
                 ? t("leads")
@@ -572,12 +573,12 @@ export default function App() {
                   </div>
                   <div className="account-card-grid">
                     {accounts.map((acc) => {
-                      if (!acc || acc.id == null) return null;
+                      if (!acc || !accountKey(acc)) return null;
                       const meta = accountStatusMeta(acc, t);
                       const switchOn = (acc.status || "").toUpperCase() !== "PAUSED";
                       return (
                         <div
-                          key={acc.id}
+                          key={accountKey(acc)}
                           className="account-card"
                           onClick={() => setLoginModalAcc(acc)}
                         >

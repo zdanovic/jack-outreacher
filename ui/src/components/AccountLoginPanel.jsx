@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { accountDisplayId, accountKey } from "../utils/accounts.js";
 
 const API_BASE = "/api";
 
@@ -18,7 +19,8 @@ export default function AccountLoginPanel({ account, authToken, csrfToken, refre
     setLoading(true);
     setMessage(null);
     try {
-      const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/login/start`, {
+      const accId = accountKey(account);
+      const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(accId)}/login/start`, {
         method: "POST",
         credentials: "include",
         headers,
@@ -41,7 +43,8 @@ export default function AccountLoginPanel({ account, authToken, csrfToken, refre
     try {
       const body = { code };
       if (password) body.password = password;
-      const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/login/verify`, {
+      const accId = accountKey(account);
+      const resp = await fetch(`${API_BASE}/accounts/${encodeURIComponent(accId)}/login/verify`, {
         method: "POST",
         credentials: "include",
         headers,
@@ -61,7 +64,8 @@ export default function AccountLoginPanel({ account, authToken, csrfToken, refre
   };
 
   const pause = async () => {
-    await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/pause`, {
+    const accId = accountKey(account);
+    await fetch(`${API_BASE}/accounts/${encodeURIComponent(accId)}/pause`, {
       method: "POST",
       credentials: "include",
       headers,
@@ -70,7 +74,8 @@ export default function AccountLoginPanel({ account, authToken, csrfToken, refre
   };
 
   const resume = async () => {
-    await fetch(`${API_BASE}/accounts/${encodeURIComponent(account.id)}/resume`, {
+    const accId = accountKey(account);
+    await fetch(`${API_BASE}/accounts/${encodeURIComponent(accId)}/resume`, {
       method: "POST",
       credentials: "include",
       headers,
@@ -83,7 +88,9 @@ export default function AccountLoginPanel({ account, authToken, csrfToken, refre
       <div className="settings-header">
         <div>
           <h3>Account login & control</h3>
-          <p className="muted">Отправь код, подтверди логин, пауза/возврат. Работает только для выбранного аккаунта.</p>
+          <p className="muted">
+            Отправь код, подтверди логин, пауза/возврат. Аккаунт: {accountDisplayId(account)}.
+          </p>
         </div>
         <div className="account-controls">
           <button onClick={pause} disabled={loading}>Pause</button>

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { accountKey, accountPhoneTail, eventAccountId } from "../utils/accounts.js";
 
 const API_BASE = "/api";
 
@@ -28,10 +29,9 @@ export default function LogsView({ logs, authToken, csrfToken, accounts = [], t 
   const phoneTailMap = useMemo(() => {
     const map = {};
     accounts.forEach((acc) => {
-      const digits = (acc.phone || "").replace(/\D/g, "");
-      if (digits) {
-        map[acc.id] = digits.slice(-4);
-      }
+      const key = accountKey(acc);
+      const tail = accountPhoneTail(acc);
+      if (key && tail) map[key] = tail;
     });
     return map;
   }, [accounts]);
@@ -48,11 +48,12 @@ export default function LogsView({ logs, authToken, csrfToken, accounts = [], t 
   };
 
   const handleRowClick = async (log) => {
-    if (!log.account_id || !log.target) return;
-    setModal({ account_id: log.account_id, target: log.target, messages: [], loading: true, error: null });
+    const accId = eventAccountId(log);
+    if (!accId || !log.target) return;
+    setModal({ account_id: accId, target: log.target, messages: [], loading: true, error: null });
     try {
       const resp = await fetch(
-        `${API_BASE}/accounts/${encodeURIComponent(log.account_id)}/dialogs/${encodeURIComponent(log.target)}/messages`,
+        `${API_BASE}/accounts/${encodeURIComponent(accId)}/dialogs/${encodeURIComponent(log.target)}/messages`,
         { headers, credentials: "include" }
       );
       const data = await resp.json();
@@ -96,7 +97,7 @@ export default function LogsView({ logs, authToken, csrfToken, accounts = [], t 
             {[...logs].reverse().map((e, idx) => (
               <tr key={idx} className="log-row" onClick={() => handleRowClick(e)}>
                 <td>{formatTs(e.ts)}</td>
-                <td>{renderAccountLabel(e.account_id)}</td>
+                <td>{renderAccountLabel(eventAccountId(e))}</td>
                 <td>{e.action_type}</td>
                 <td>{e.target}</td>
                 <td>{statusBadge(e.result)}</td>

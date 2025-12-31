@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { accountKey, accountPhoneTail, leadAccountId } from "../utils/accounts.js";
 
 const API_BASE = "/api";
 const STATUS_OPTS = [
@@ -43,8 +44,7 @@ function accountLabel(accMap, accountId) {
   if (!accountId) return "";
   const acc = accMap[accountId];
   if (!acc) return accountId;
-  const digits = (acc.phone || "").replace(/\D/g, "");
-  const tail = digits ? digits.slice(-4) : null;
+  const tail = accountPhoneTail(acc);
   return (
     <>
       {accountId} {tail ? <span className="account-phone-hint log-phone-hint">(...{tail})</span> : null}
@@ -81,7 +81,7 @@ export default function LeadsView({ authToken, csrfToken, accounts = [], t = (ke
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
   };
-  const accMap = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
+  const accMap = useMemo(() => Object.fromEntries(accounts.map((a) => [accountKey(a), a])), [accounts]);
 
   const toggleStatus = (id) => {
     setStatuses((prev) => {
@@ -152,7 +152,7 @@ export default function LeadsView({ authToken, csrfToken, accounts = [], t = (ke
   };
 
   const openLead = async (lead) => {
-    const accountId = lead.last_account_id || accounts[0]?.id;
+    const accountId = leadAccountId(lead) || accountKey(accounts[0]);
     setModal({ lead, messages: [], loading: true, error: null, accountId });
     if (!accountId) {
       setModal((prev) => ({ ...prev, loading: false, error: t("error") }));
@@ -361,7 +361,7 @@ function LeadCardContent({ lead, accMap, t, palette }) {
         {lead.source ? <span className="lead-source chip-soft">{lead.source}</span> : null}
         <span className="lead-tag">{lead.tag || "n/a"}</span>
         <span className="lead-time">{formatTs(lead.last_contacted_at)}</span>
-        <span className="lead-account">{accountLabel(accMap, lead.last_account_id)}</span>
+        <span className="lead-account">{accountLabel(accMap, leadAccountId(lead))}</span>
         {lead.fail_reason ? <span className="lead-fail">{lead.fail_reason}</span> : null}
       </div>
       {bioPreview ? <div className="lead-bio">{bioPreview}</div> : null}
