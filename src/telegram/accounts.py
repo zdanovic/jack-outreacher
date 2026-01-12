@@ -52,7 +52,7 @@ class AccountWorker:
         self,
         cfg: AccountConfig,
         client_adapter: TelegramClientAdapter,
-        startup_jitter_sec: float = 60.0,
+        startup_jitter_sec: float = 600.0,
         scheduler: Optional[GlobalScheduler] = None,
     ) -> None:
         self.cfg = cfg
@@ -69,6 +69,24 @@ class AccountWorker:
         self._client = None
         self._outbox_flush_interval_sec = 30.0
         self._last_outbox_flush: float = 0.0
+        # Periodic lightweight healthcheck to detect dropped sessions.
+        self._healthcheck_min_sec = 12 * 60  # randomize to avoid synch spikes
+        self._healthcheck_max_sec = 20 * 60
+        self._next_healthcheck: float = time.time() + random.uniform(
+            self._healthcheck_min_sec, self._healthcheck_max_sec
+        )
+
+    async def _mark_session_invalid(self, reason: str) -> None:
+        """Set status to NEED_RELOGIN and log a login_state event."""
+        await global_state.set_last_error(self.cfg.id, reason)
+        await global_state.set_status(self.cfg.id, AccountStatus.NEED_RELOGIN)
+        await logs_store.log_event(
+            account_id=self.cfg.id,
+            action_type="LOGIN_STATE",
+            target=self.cfg.phone,
+            result="need_relogin",
+            info=reason,
+        )
 
     def is_running(self) -> bool:
         return self._task is not None and not self._task.done()
@@ -201,7 +219,8 @@ class AccountWorker:
         # Idle / action loop – later this will execute real actions from the scheduler.
         while not self._stopped.is_set():
             if self.scheduler is None:
-                # No scheduler wired yet – just keep the connection warm.
+                # No scheduler wired yet – just keep the connection warm + periodic healthcheck.
+                await self._maybe_healthcheck()
                 await self._maybe_flush_outbox()
                 await asyncio.sleep(5.0)
                 continue
@@ -209,6 +228,7 @@ class AccountWorker:
             action = await self.scheduler.next_action(self.cfg.id)
             if action is None:
                 # Nothing planned – short idle before checking again.
+                await self._maybe_healthcheck()
                 await self._maybe_flush_outbox()
                 await asyncio.sleep(5.0)
                 continue
@@ -220,6 +240,7 @@ class AccountWorker:
 
             if self._client is None:
                 logger.warning("Account %s: client not available to execute action %s", self.cfg.id, action.type)
+                await self._maybe_healthcheck()
                 await self._maybe_flush_outbox()
                 continue
 
@@ -236,6 +257,7 @@ class AccountWorker:
                     self.cfg.id,
                     action.type.name,
                 )
+            await self._maybe_healthcheck()
             await self._maybe_flush_outbox()
 
         logger.info("Account %s: worker stopping.", self.cfg.id)
@@ -248,6 +270,65 @@ class AccountWorker:
         if self._task is not None:
             await self._task
         self._client = None
+
+    async def _maybe_healthcheck(self) -> None:
+        """
+        Periodically re-validate session state without spamming Telegram.
+        Lightweight: just is_user_authorized() and get_me().
+        """
+        now = time.time()
+        if now < self._next_healthcheck:
+            return
+        # Schedule next window up-front to avoid tight loops on errors.
+        self._next_healthcheck = now + random.uniform(
+            self._healthcheck_min_sec, self._healthcheck_max_sec
+        )
+
+        if self._client is None:
+            return
+
+        try:
+            authorized = await self._client.is_user_authorized()
+            if not authorized:
+                reason = "session not authorized; login required"
+                await global_state.set_last_error(self.cfg.id, reason)
+                await global_state.set_status(self.cfg.id, AccountStatus.NEED_RELOGIN)
+                await logs_store.log_event(
+                    account_id=self.cfg.id,
+                    action_type="LOGIN_STATE",
+                    target=self.cfg.phone,
+                    result="need_relogin",
+                    info=reason,
+                )
+                return
+
+            me = await self._client.get_me()
+            if me is None:
+                reason = "session invalid (no profile info)"
+                await global_state.set_last_error(self.cfg.id, reason)
+                await global_state.set_status(self.cfg.id, AccountStatus.NEED_RELOGIN)
+                await logs_store.log_event(
+                    account_id=self.cfg.id,
+                    action_type="LOGIN_STATE",
+                    target=self.cfg.phone,
+                    result="need_relogin",
+                    info=reason,
+                )
+                return
+
+            # Session ok – clear transient error/bans if any.
+            await global_state.set_last_error(self.cfg.id, None)
+            await global_state.set_ban_reason(self.cfg.id, None)
+        except Exception as e:
+            # Do not spam telemetry; just mark error and let UI show it.
+            await global_state.set_last_error(self.cfg.id, f"healthcheck_failed: {e}")
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="LOGIN_STATE",
+                target=self.cfg.phone,
+                result="error",
+                info=str(e),
+            )
 
     async def _handle_read_channel(self, context: dict) -> None:
         """
@@ -292,6 +373,9 @@ class AccountWorker:
                 result="error",
                 info=str(e),
             )
+        except (SessionRevokedError, AuthKeyUnregisteredError) as e:
+            reason = f"session invalid: {e}"
+            await self._mark_session_invalid(reason)
         except Exception as e:
             logger.debug("Account %s: error during READ_CHANNEL %s: %s", self.cfg.id, channel, e)
             await global_state.set_last_error(self.cfg.id, str(e))
@@ -345,6 +429,9 @@ class AccountWorker:
                 result="error",
                 info=str(e),
             )
+        except (SessionRevokedError, AuthKeyUnregisteredError) as e:
+            reason = f"session invalid: {e}"
+            await self._mark_session_invalid(reason)
 
     async def _handle_send_cold_dm(self, context: dict) -> None:
         """
@@ -388,11 +475,10 @@ class AccountWorker:
             account_persona = legend.get("persona", "")
             account_style = legend.get("style", "friendly")
 
-            language_tag = (context.get("tag") or "eng").lower()
-            if language_tag.startswith("ru"):
-                language = "Russian"
-            else:
-                language = "English"
+            language_tag = (context.get("tag") or "ru").lower()
+            # Мы работаем только по-русски; поле оставляем для совместимости,
+            # но принудительно считаем основной язык русским.
+            language = "Russian"
 
             first_name = name or username
             user_prompt = (
@@ -418,7 +504,7 @@ class AccountWorker:
 
         # Conservative fallback message if AI is not available.
         if not text:
-            text = f"Hi {name or username}, wanted to briefly connect here."
+            text = f"Привет, {name or username}! Решил написать здесь и познакомиться."
 
         try:
             # Typing delay to mimic human behaviour.
@@ -450,6 +536,9 @@ class AccountWorker:
                         last_account_id=self.cfg.id,
                     )
                 )
+        except (SessionRevokedError, AuthKeyUnregisteredError) as e:
+            reason = f"session invalid: {e}"
+            await self._mark_session_invalid(reason)
         except Exception as e:
             await metrics_store.incr(self.cfg.id, "cold_failed", 1)
             await logs_store.log_event(
