@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 from threading import Lock
 
 
@@ -34,10 +35,28 @@ _db_instance: "StateDB | None" = None
 class StateDB:
     def __init__(self, path: str) -> None:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        self.conn = sqlite3.connect(path, check_same_thread=False)
+        self.conn = self._connect_with_retry(path)
         self.conn.execute("PRAGMA journal_mode=WAL;")
         self.conn.execute("PRAGMA synchronous=NORMAL;")
+        self.conn.execute("PRAGMA busy_timeout=5000;")
         self._init_schema()
+
+    def _connect_with_retry(self, path: str, attempts: int = 3, delay: float = 0.25) -> sqlite3.Connection:
+        """
+        Attempt to open the SQLite file with a few retries to soften transient
+        host-filesystem issues (common on macOS bind mounts).
+        """
+        last_err: Exception | None = None
+        for i in range(max(1, attempts)):
+            try:
+                return sqlite3.connect(path, check_same_thread=False, timeout=10)
+            except sqlite3.OperationalError as e:  # pragma: no cover - only under FS issues
+                last_err = e
+                time.sleep(delay * (i + 1))
+        if last_err:
+            raise last_err
+        # Fallback (should not hit)
+        return sqlite3.connect(path, check_same_thread=False, timeout=10)
 
     def _init_schema(self) -> None:
         cur = self.conn.cursor()

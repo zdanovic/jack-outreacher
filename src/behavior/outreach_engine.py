@@ -45,6 +45,16 @@ class OutreachEngine:
 
         send_min = float(outreach_cfg.get("send_interval_min", SEND_INTERVAL_MIN))
         send_max = float(outreach_cfg.get("send_interval_max", SEND_INTERVAL_MAX))
+
+        # Customer test mode: allow faster jitter tuned by env in LeadsStore.
+        if getattr(self._leads, "customer_test_mode", False):
+            send_min = getattr(self._leads, "customer_test_send_min", send_min)
+            send_max = getattr(self._leads, "customer_test_send_max", send_max)
+            # Boundaries sanity.
+            if send_min <= 0:
+                send_min = 1.0
+            if send_max < send_min:
+                send_max = send_min + 1.0
         max_batch = int(outreach_cfg.get("max_per_batch", max_per_batch))
         max_per_batch = max_batch or max_per_batch
 

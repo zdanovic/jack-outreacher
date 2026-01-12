@@ -1645,8 +1645,8 @@ body {
 
 .account-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
 }
 
 .account-card {
@@ -1658,19 +1658,25 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  min-width: 0;
+  min-height: 240px;
 }
 
 .account-card-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
 }
 
 .account-head-actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .account-card-body {
@@ -1679,6 +1685,7 @@ body {
   gap: 0.35rem;
   color: #cbd5e1;
   font-size: 0.85rem;
+  flex: 1;
 }
 
 .account-metrics.compact {
@@ -1690,6 +1697,22 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.35rem 0.5rem;
+}
+
+.account-head-actions .status-pill {
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.account-head-actions .switch {
+  flex-shrink: 0;
+}
+
+.account-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  width: 100%;
 }
 
 .account-alert {

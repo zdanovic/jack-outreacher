@@ -15,6 +15,8 @@ services:
     build:
       context: .
     command: uvicorn src.app.api:app --host 0.0.0.0 --port 8000
+    init: true
+    stop_grace_period: 20s
     logging:
       driver: "json-file"
       options:
@@ -23,8 +25,14 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
-      - ./sessions:/app/sessions
+      - app_data:/app/data
+      - app_sessions:/app/sessions
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       - redis
     restart: unless-stopped
@@ -33,6 +41,8 @@ services:
     build:
       context: .
     command: python -m src.app.runner
+    init: true
+    stop_grace_period: 20s
     logging:
       driver: "json-file"
       options:
@@ -41,8 +51,14 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
-      - ./sessions:/app/sessions
+      - app_data:/app/data
+      - app_sessions:/app/sessions
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport os, sqlite3, sys\npath = os.path.join(os.environ.get('DATA_DIR', '/app/data'), 'orchestrator_state.db')\ntry:\n    conn = sqlite3.connect(path, timeout=3)\n    conn.execute('PRAGMA user_version;')\n    conn.close()\n    sys.exit(0)\nexcept Exception as e:\n    print(e)\n    sys.exit(1)\nPY"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
     depends_on:
       - redis
       - api
@@ -79,3 +95,7 @@ services:
   #   environment:
   #     - TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN}
   #   restart: unless-stopped
+
+volumes:
+  app_data:
+  app_sessions:

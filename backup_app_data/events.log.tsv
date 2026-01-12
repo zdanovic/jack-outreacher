@@ -1,0 +1,30 @@
+ts	account_id	action_type	target	result	info
+2026-01-12T11:23:01Z	9	LOGIN_STATE	+381616862897	need_relogin	session not authorized; login required
+2026-01-12T11:23:02Z	4	LOGIN_STATE	+381637502995	need_relogin	session not authorized; login required
+2026-01-12T12:17:01Z	8	LOGIN_STATE	+381616841433	need_relogin	session not authorized; login required
+2026-01-12T12:17:03Z	1	LOGIN_STATE	+381621982364	need_relogin	session not authorized; login required
+2026-01-12T12:17:14Z	12	LOGIN_STATE	+381616865483	need_relogin	session not authorized; login required
+2026-01-12T12:17:15Z	4	LOGIN_STATE	+381637502995	need_relogin	session not authorized; login required
+2026-01-12T12:17:19Z	11	LOGIN_STATE	+381616842105	need_relogin	session not authorized; login required
+2026-01-12T12:17:33Z	13	LOGIN_STATE	+381616838849	need_relogin	session not authorized; login required
+2026-01-12T12:17:34Z	5	LOGIN_STATE	+381616841852	need_relogin	session not authorized; login required
+2026-01-12T12:17:34Z	9	LOGIN_STATE	+381616862897	need_relogin	session not authorized; login required
+2026-01-12T12:17:40Z	2	LOGIN_STATE	+381621982359	need_relogin	session not authorized; login required
+2026-01-12T12:17:52Z	6	LOGIN_STATE	+381616839878	need_relogin	session not authorized; login required
+2026-01-12T12:17:52Z	security	AUTHN_FAIL	/auth/me	unauthorized	ip=109.245.161.54
+2026-01-12T12:17:54Z	7	LOGIN_STATE	+381616687756	need_relogin	session not authorized; login required
+2026-01-12T12:17:56Z	3	LOGIN_STATE	+381628618782	need_relogin	session not authorized; login required
+2026-01-12T12:18:02Z	10	LOGIN_STATE	+381617303567	need_relogin	session not authorized; login required
+2026-01-12T12:22:59Z	1	LOGIN_STATE	+381621982364	need_relogin	session not authorized; login required
+2026-01-12T12:23:07Z	4	LOGIN_STATE	+381637502995	need_relogin	session not authorized; login required
+2026-01-12T12:23:11Z	2	LOGIN_STATE	+381621982359	need_relogin	session not authorized; login required
+2026-01-12T12:23:14Z	8	LOGIN_STATE	+381616841433	need_relogin	session not authorized; login required
+2026-01-12T12:23:18Z	5	LOGIN_STATE	+381616841852	need_relogin	session not authorized; login required
+2026-01-12T12:23:27Z	9	LOGIN_STATE	+381616862897	need_relogin	session not authorized; login required
+2026-01-12T12:23:32Z	6	LOGIN_STATE	+381616839878	need_relogin	session not authorized; login required
+2026-01-12T12:23:35Z	11	LOGIN_STATE	+381616842105	need_relogin	session not authorized; login required
+2026-01-12T12:23:44Z	12	LOGIN_STATE	+381616865483	need_relogin	session not authorized; login required
+2026-01-12T12:23:45Z	3	LOGIN_STATE	+381628618782	need_relogin	session not authorized; login required
+2026-01-12T12:23:50Z	10	LOGIN_STATE	+381617303567	need_relogin	session not authorized; login required
+2026-01-12T12:23:54Z	13	LOGIN_STATE	+381616838849	need_relogin	session not authorized; login required
+2026-01-12T12:23:54Z	7	LOGIN_STATE	+381616687756	need_relogin	session not authorized; login required
