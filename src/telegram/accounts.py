@@ -480,16 +480,20 @@ class AccountWorker:
             # но принудительно считаем основной язык русским.
             language = "Russian"
 
-            first_name = name or username
+            first_name = context.get("first_name") or name or username
+            last_name = context.get("last_name") or ""
+            bio = context.get("bio") or ""
+            source = context.get("source") or ""
             user_prompt = (
                 f"As a {account_role} who is {account_persona}, write a short, casual, and natural-sounding "
                 f"first message to this potential lead in {language}.\n"
                 f"Your tone should be {account_style}.\n\n"
                 f"**Lead's Information:**\n"
                 f"- First Name: {first_name or 'N/A'}\n"
-                f"- Last Name: N/A\n"
-                f"- Professional Bio/Info: N/A\n"
-                f"- Display Name in Chat: N/A\n"
+                f"- Last Name: {last_name or 'N/A'}\n"
+                f"- Professional Bio/Info: {bio or 'N/A'}\n"
+                f"- Display Name in Chat: {name or username or 'N/A'}\n"
+                f"- Source: {source or 'N/A'}\n"
                 f"- Preferred Language Code: {language_tag}\n\n"
                 f"**TASK:** Generate ONLY the message text. Follow all instructions in the system prompt below precisely."
             )
@@ -502,9 +506,18 @@ class AccountWorker:
             if ai_text:
                 text = ai_text.strip()
 
-        # Conservative fallback message if AI is not available.
+        # Если не смогли сгенерировать текст – не шлём пустышки.
         if not text:
-            text = f"Привет, {name or username}! Решил написать здесь и познакомиться."
+            await metrics_store.incr(self.cfg.id, "cold_failed", 1)
+            await logs_store.log_event(
+                account_id=self.cfg.id,
+                action_type="SEND_COLD_DM",
+                target=str(username),
+                result="error",
+                info="ai_generation_failed",
+            )
+            await global_state.set_last_error(self.cfg.id, "ai_generation_failed")
+            return
 
         try:
             # Typing delay to mimic human behaviour.

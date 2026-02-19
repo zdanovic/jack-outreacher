@@ -240,7 +240,7 @@ class LeadsStore:
             cur.execute("BEGIN IMMEDIATE;")
             cur.execute(
                 """
-                SELECT username, name, tag, source, status, last_account_id, last_contacted_at
+                SELECT username, name, first_name, last_name, bio, tag, source, status, last_account_id, last_contacted_at
                 FROM leads
                 WHERE status = 'new'
                 LIMIT 1;
@@ -250,7 +250,7 @@ class LeadsStore:
             if not row:
                 self._db.conn.commit()
                 return None
-            username, name, tag, source, status, last_account_id, last_contacted_at = row
+            username, name, first_name, last_name, bio, tag, source, status, last_account_id, last_contacted_at = row
             cur.execute(
                 """
                 UPDATE leads
@@ -264,6 +264,9 @@ class LeadsStore:
             return Lead(
                 username=username,
                 name=name or "",
+                first_name=first_name or "",
+                last_name=last_name or "",
+                bio=bio or "",
                 tag=tag or "",
                 source=source or "",
                 status="pending",

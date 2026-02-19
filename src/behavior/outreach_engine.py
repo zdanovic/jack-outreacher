@@ -79,6 +79,9 @@ class OutreachEngine:
                     context={
                         "username": lead.username,
                         "name": lead.name,
+                        "first_name": lead.first_name,
+                        "last_name": lead.last_name,
+                        "bio": lead.bio,
                         "tag": lead.tag,
                         "source": lead.source,
                     },
